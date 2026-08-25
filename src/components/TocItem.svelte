@@ -19,6 +19,10 @@
   export let onDragStart: () => void = () => {};
   export let onDragEnd: () => void = () => {};
   export let onSelect: (item: TocItem, event: MouseEvent) => void = () => {};
+  // onFocus：用户"单击"某条目录时回调，用于在编辑器侧记录插入锚点（焦点条目）
+  export let onFocus: (item: TocItem) => void = () => {};
+  // focusedId：当前焦点条目的 id，用于渲染紫色边框高亮，让用户看清新章节会插到哪
+  export let focusedId: string | null = null;
   export let onSelectionDragStart: (item: TocItem, event: MouseEvent) => void = () => {};
   export let onSelectionDragEnter: (item: TocItem) => void = () => {};
   export let selectedIds: Set<string> = new Set();
@@ -34,7 +38,6 @@
   export let index = 0;
 
   const dispatch = createEventDispatcher<{
-    hoveritem: {to: number};
     jumpToPage: {to: number};
     showNavHint: void;
   }>();
@@ -44,7 +47,6 @@
   let editPage = item ? item.to : 1;
   let isFocused = false;
   let isPageFocused = false;
-  let suppressNextRowClick = false;
 
   $: currentNumber = prefix ? `${prefix}.${index}` : `${index}`;
   $: isSelected = selectedIds.has(item.id);
@@ -67,6 +69,12 @@
     physicalContentPage >= insertAtPage ? physicalContentPage + tocPageCount : physicalContentPage;
 
   $: isActive = isPreview && currentPage === targetPageInPreview;
+
+  // 是否为"焦点条目"（用户最后单击的条目，即新章节的插入锚点）。
+  // 高亮规则已统一：预览页跟随（isActive）和插入锚点焦点（isFocusedItem）
+  // 都使用同一种蓝色高亮，不再用紫色边框区分两种状态。
+  $: isFocusedItem = focusedId === item.id;
+  $: isHighlighted = isActive || isFocusedItem;
 
   function handleToggle() {
     item.open = !item.open;
@@ -126,10 +134,56 @@
     onUpdate(item, {children: updatedChildren});
   }
 
-  function handleMouseEnter() {
-    if (item) {
-      dispatch('hoveritem', {to: item.to});
+  // ---- 焦点与框选的交互设计说明 ----
+  // 旧行为：鼠标悬浮（mouseenter）就会让右侧 PDF 预览跳页，浏览目录时预览会跟着乱跳。
+  // 新行为：只有"单击"某条目录才算聚焦该条目，右侧预览才跳到对应页；
+  //        按下后拖动超过阈值则视为"框选"操作，不会触发聚焦跳页。
+  // 悬浮时显示拖拽把手 / 选择圆点的 UI 保持不变。
+
+  // 记录鼠标按下的起点位置，用于在 click 时判断这次是"单击"还是"拖动框选"
+  let rowDownPos: {x: number; y: number} | null = null;
+  // 是否已经移动超过阈值（超过即认定为拖拽框选，而非单击）
+  let hasRowDragMoved = false;
+  // 拖动判定阈值：位移超过该像素数才视为拖动，避免手抖误判
+  const DRAG_MOVE_THRESHOLD = 4;
+
+  function handleRowMouseDown(event: MouseEvent) {
+    if (isSelectionBlockedTarget(event.target)) return;
+
+    if (event.shiftKey) {
+      event.preventDefault();
+      return;
     }
+
+    // 仅记录起点并阻止默认的文本选择行为；
+    // 框选延迟到 mousemove 超过阈值时才启动（见下方 window 级监听），
+    // 这样纯单击不会像旧行为那样顺带选中条目。
+    event.preventDefault();
+    rowDownPos = {x: event.clientX, y: event.clientY};
+    hasRowDragMoved = false;
+
+    // 注意：拖动检测必须挂在 window 上而不是行元素上——
+    // 鼠标按住拖出该行后，行元素收不到后续 mousemove 事件，
+    // 若挂在行上，框选会在鼠标离开行的瞬间"卡死"无法启动。
+    const onMove = (e: MouseEvent) => {
+      if (!rowDownPos || hasRowDragMoved) return;
+      if (
+        Math.abs(e.clientX - rowDownPos.x) > DRAG_MOVE_THRESHOLD ||
+        Math.abs(e.clientY - rowDownPos.y) > DRAG_MOVE_THRESHOLD
+      ) {
+        hasRowDragMoved = true;
+        // 此时才真正开始框选：以当前条目为锚点开始选择
+        onSelectionDragStart(item, e);
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      // 保留 hasRowDragMoved 供随后的 click 事件判断是否为纯单击；
+      // rowDownPos 立即清空，避免下一次按下前残留旧起点
+      rowDownPos = null;
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp, {once: true});
   }
 
   function handleDndConsider(e: CustomEvent<{items: TocItem[]}>) {
@@ -182,26 +236,35 @@
   }
 
   function handleRowClick(event: MouseEvent) {
-    if (suppressNextRowClick) {
-      suppressNextRowClick = false;
+    // 按钮、输入框、拖拽把手等交互元素上的点击不参与"聚焦/选择"逻辑
+    if (isSelectionBlockedTarget(event.target)) return;
+
+    // Shift+点击：保留原有的范围多选行为
+    if (event.shiftKey) {
+      onSelect(item, event);
       return;
     }
 
-    if (isSelectionBlockedTarget(event.target)) return;
-    onSelect(item, event);
+    // 纯单击（按下后没有拖动）：聚焦该条目并让右侧 PDF 预览跳到对应页。
+    // 注意：这里不再调用 onSelect，避免单击浏览目录时误选中条目；
+    // 多选仍然可以通过悬浮出现的圆点按钮、按住拖动框选、Shift+点击完成。
+    if (!hasRowDragMoved) {
+      onFocus(item);
+      dispatch('jumpToPage', {to: item.to});
+    }
+
+    rowDownPos = null;
+    hasRowDragMoved = false;
   }
 
-  function handleRowMouseDown(event: MouseEvent) {
-    if (isSelectionBlockedTarget(event.target)) return;
-
-    if (event.shiftKey) {
-      event.preventDefault();
-      return;
-    }
-
-    event.preventDefault();
-    suppressNextRowClick = true;
-    onSelectionDragStart(item, event);
+  // 单击标题/页码输入框同样视为"聚焦该条目"：
+  // 这两个输入框占据条目的绝大部分面积，若只允许点行空白处才能聚焦，
+  // 用户几乎每次点击都落在输入框上，焦点功能会形同虚设。
+  // Shift+点击的范围多选仍由 handleShiftSelectFromInput 在 mousedown 阶段处理，这里直接放行。
+  function handleInputClick(event: MouseEvent) {
+    if (event.shiftKey) return;
+    onFocus(item);
+    dispatch('jumpToPage', {to: item.to});
   }
 
   function handleSelectionDotMouseDown(event: MouseEvent) {
@@ -268,13 +331,12 @@
   <div>
     <div
       class="flex items-center gap-1 py-1.5 rounded-md group -mr-1 border-2 border-transparent"
-      class:bg-blue-200={isActive}
-      class:font-bold={isActive}
+      class:bg-blue-200={isHighlighted}
+      class:font-bold={isHighlighted}
       class:border-amber-400={isSelected}
-      class:bg-amber-50={isSelected && !isActive}
+      class:bg-amber-50={isSelected && !isHighlighted}
       data-is-dnd-shadow-item-hint={isShadowItem}
       data-toc-item-id={item.id}
-      on:mouseenter={handleMouseEnter}
       on:mouseover={() => onSelectionDragEnter(item)}
       on:mousedown={handleRowMouseDown}
       on:click={handleRowClick}
@@ -337,6 +399,7 @@
             type="text"
             bind:value={editTitle}
             on:mousedown={handleShiftSelectFromInput}
+            on:click={handleInputClick}
             on:focus={handleTitleFocus}
             on:blur={() => {
               isFocused = false;
@@ -354,6 +417,7 @@
         type="number"
         bind:value={editPage}
         on:mousedown={handleShiftSelectFromInput}
+        on:click={handleInputClick}
         on:input={handlePageInput}
         on:focus={() => (isPageFocused = true)}
         on:blur={() => {
@@ -406,6 +470,8 @@
               {onDragStart}
               {onDragEnd}
               {onSelect}
+              {onFocus}
+              {focusedId}
               {onSelectionDragStart}
               {onSelectionDragEnter}
               {selectedIds}
@@ -416,7 +482,6 @@
               {insertAtPage}
               {tocPageCount}
               on:showNavHint
-              on:hoveritem
               on:jumpToPage={(e: CustomEvent<{to: number}>) => dispatch('jumpToPage', e.detail)}
             />
           </div>

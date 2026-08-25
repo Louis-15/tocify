@@ -127,7 +127,6 @@
 
   {#key $curFileFingerprint}
     <TocEditor
-      on:hoveritem
       on:jumpToPage={(e) => dispatch('jumpToPage', e.detail)}
       on:aiFormatResponse
       bind:this={tocEditor}

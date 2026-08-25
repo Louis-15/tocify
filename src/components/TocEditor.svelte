@@ -683,27 +683,100 @@
     return findFirst($tocItems);
   })();
 
-  const addMultipleTocItems = (count: number) => {
-    saveHistory();
-    const currentItems = $tocItems;
-    let startPage;
+  // ---- 焦点条目（插入锚点）状态 ----
+  // 记录用户最后单击的目录条目 id。"添加章节/上方插入"按钮都以它为锚点：
+  // 单击某条目录后，新条目会紧挨着它插入（同层级），满足"在序言/前言区域连续补条目"的场景。
+  let focusedItemId: string | null = null;
 
-    if (currentItems.length > 0) {
-      startPage = Math.max(...currentItems.map((item) => item.to)) + 1;
-    } else {
-      startPage = ($maxPage || 0) + 1;
+  function handleFocusItem(item: TocEntry) {
+    focusedItemId = item.id;
+  }
+
+  // 插入新条目后自动聚焦其标题输入框，方便连续录入（如逐条补前言、序言条目）
+  async function focusNewItemTitle(id: string) {
+    await tick();
+    const input = document.querySelector<HTMLInputElement>(
+      `[data-toc-item-id="${id}"] .toc-item-title`,
+    );
+    input?.focus();
+  }
+
+  /**
+   * 在焦点条目的上/下方紧挨着插入一条同层级的新书签。
+   *
+   * 实现思路：目录树 → 扁平列表（含层级）→ 插入 → 重建树。
+   * 复用现有的 flattenTocItems / buildTreeFromFlat，保证与搜索、批量操作等逻辑一致。
+   *
+   * 边界说明：
+   * - 若焦点条目带有子节点，插到其"下方"时新条目会成为它的兄弟节点，
+   *   而不是它的第一个子节点（扁平列表按深度优先顺序展开，同级插入自然截断子树归属）。
+   * - 新条目页码默认与锚点相同：插入场景多在序言/前言附近，页码接近锚点，
+   *   不做 +1 猜测，用户可直接修改页码输入框。
+   * - 无焦点时"下方插入"退化为旧行为（追加到目录末尾），保证空目录时也能添加第一条。
+   */
+  const insertTocItemAtAnchor = (position: 'above' | 'below') => {
+    saveHistory();
+    const flatItems = flattenTocItems($tocItems);
+    const uid = new ShortUniqueId({length: 10});
+
+    // 空目录：直接追加一条根级条目（沿用旧的起始页码规则）
+    if (flatItems.length === 0) {
+      const newItem = {
+        id: uid.randomUUID(),
+        title: '',
+        to: ($maxPage || 0) + 1,
+        children: [],
+        open: true,
+      };
+      $tocItems = [newItem];
+      focusedItemId = newItem.id;
+      focusNewItemTitle(newItem.id);
+      return;
     }
 
-    const uid = new ShortUniqueId({length: 10});
-    const newItems = Array.from({length: count}, (_, index) => ({
+    const anchorIndex = focusedItemId
+      ? flatItems.findIndex((flatItem) => flatItem.id === focusedItemId)
+      : -1;
+
+    // 无焦点（或焦点条目已被删除）：仅"下方插入"可用，退化为追加到末尾
+    if (anchorIndex === -1) {
+      if (position === 'below') {
+        const startPage = Math.max(...flatItems.map((flatItem) => flatItem.to)) + 1;
+        const newItem = {
+          id: uid.randomUUID(),
+          title: '',
+          to: startPage,
+          children: [],
+          open: true,
+        };
+        $tocItems = [...$tocItems, newItem];
+        focusedItemId = newItem.id;
+        focusNewItemTitle(newItem.id);
+      }
+      return;
+    }
+
+    const anchor = flatItems[anchorIndex];
+    const newItem = {
       id: uid.randomUUID(),
       title: '',
-      to: startPage + index,
-      children: [],
+      to: anchor.to,
       open: true,
-    }));
+      level: anchor.level,
+      parentId: anchor.parentId,
+    };
 
-    $tocItems = [...currentItems, ...newItems];
+    // above → 插在锚点前；below → 插在锚点后（若锚点有子节点，新条目为其兄弟节点）
+    const insertIndex = position === 'below' ? anchorIndex + 1 : anchorIndex;
+    const newFlatItems = [
+      ...flatItems.slice(0, insertIndex),
+      newItem,
+      ...flatItems.slice(insertIndex),
+    ];
+
+    $tocItems = buildTreeFromFlat(newFlatItems);
+    focusedItemId = newItem.id;
+    focusNewItemTitle(newItem.id);
   };
 
   const toggleAll = (open: boolean) => {
@@ -767,10 +840,6 @@
     showBatchOffsetEditor = false;
     batchOffsetInput = '';
   }
-
-  const addTocItem = () => {
-    addMultipleTocItems(1);
-  };
 
   const updateTocItem = (item: TocEntry, updates: Partial<TocEntry>, skipHistory = false) => {
     if (!skipHistory) {
@@ -1033,6 +1102,8 @@
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               onSelect={handleSelectItem}
+              onFocus={handleFocusItem}
+              focusedId={focusedItemId}
               onSelectionDragStart={handleSelectionDragStart}
               onSelectionDragEnter={handleSelectionDragEnter}
               {currentPage}
@@ -1043,7 +1114,6 @@
               {selectedIds}
               searchQuery={tocSearchQuery}
               on:showNavHint={handleShowNavHint}
-              on:hoveritem
               on:jumpToPage={(e: CustomEvent<{to: number}>) => {
                 dispatch('jumpToPage', e.detail);
               }}
@@ -1054,24 +1124,30 @@
       </section>
     {/if}
 
-    <div class="flex items-center gap-2 ml-12 mt-3 mb-4">
+    <!--
+      插入操作按钮条：
+      使用 sticky bottom-0 将整条按钮钉在滚动视口底部——目录再长、滚到多深，
+      按钮都始终可见，解决旧版"按钮在目录末尾、识别出目录后基本看不到"的问题。
+      半透明白底 + 毛玻璃，避免与下方滚过的列表文字混叠。
+    -->
+    <div
+      class="sticky bottom-0 z-30 flex items-center gap-2 ml-12 mt-3 py-2 px-1 -mx-1 bg-white/90 backdrop-blur-sm rounded-lg"
+    >
       <button
-        on:click={addTocItem}
+        on:click={() => insertTocItemAtAnchor('below')}
         class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
+        title={$t('toc.insert_below_hint')}
       >
         {$t('btn.add_chapter')}
       </button>
+      <!-- 上方插入：必须先单击某条目录形成焦点锚点才可用 -->
       <button
-        on:click={() => addMultipleTocItems(5)}
-        class="btn font-bold bg-gray-100 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
+        on:click={() => insertTocItemAtAnchor('above')}
+        disabled={!focusedItemId}
+        class="btn font-bold bg-violet-300 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 disabled:cursor-not-allowed"
+        title={focusedItemId ? $t('toc.insert_above_hint') : $t('toc.insert_need_focus')}
       >
-        +5
-      </button>
-      <button
-        on:click={() => addMultipleTocItems(10)}
-        class="btn font-bold bg-gray-100 text-black border-2 border-black rounded-lg px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
-      >
-        +10
+        {$t('toc.insert_above')}
       </button>
     </div>
   </div>

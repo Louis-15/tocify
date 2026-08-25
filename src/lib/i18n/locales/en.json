@@ -115,13 +115,17 @@
     "clear_search": "Clear search",
     "select_item": "Select item",
     "add_child": "Add child",
-    "delete_item": "Delete item"
+    "delete_item": "Delete item",
+    "insert_above": "Insert Above",
+    "insert_below_hint": "Click a ToC entry to focus it, then insert a new sibling entry right below it",
+    "insert_above_hint": "Insert a new sibling entry right above the focused entry",
+    "insert_need_focus": "Click a ToC entry first to set the insertion anchor"
   },
   "btn": {
     "generate_toc_ai": "Generate ToC from Pages",
     "generating": "Generating...",
     "go": "Go",
-    "add_chapter": "Add New Chapter",
+    "add_chapter": "Insert Below",
     "upload_new": "Upload New",
     "loading": "Loading...",
     "select_grid": "Select",

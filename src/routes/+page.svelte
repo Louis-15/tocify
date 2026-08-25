@@ -1147,17 +1147,8 @@
   };
   const debouncedJumpToPage = debounce(jumpToPage, 300);
 
-  const handleTocItemHover = (e: CustomEvent) => {
-    if (!isPreviewMode) return;
-    const logicalPage = e.detail.to as number;
-    const physicalContentPage = logicalPage + config.pageOffset;
-    if (physicalContentPage >= (config.insertAtPage || 2)) {
-      prefetchPageNum = physicalContentPage + tocPageCount;
-    } else {
-      prefetchPageNum = physicalContentPage;
-    }
-    debouncedJumpToPage(prefetchPageNum);
-  };
+  // 注：旧版"鼠标悬浮目录条目即跳转预览"的逻辑（handleTocItemHover）已移除，
+  // 现在只有单击目录条目（TocItem 内 dispatch jumpToPage）才会让右侧预览跳页。
 
   const handleUpdateActiveRange = (e: CustomEvent) => {
     const {start, end} = e.detail;
@@ -1366,7 +1357,6 @@
         jumpToPage(finalPage);
       }}
       on:generateAi={generateTocFromAI}
-      on:hoveritem={handleTocItemHover}
       on:fileselect={(e) => loadPdfFile(e.detail)}
       on:viewerMessage={handleViewerMessage}
       on:togglePreview={togglePreviewMode}
