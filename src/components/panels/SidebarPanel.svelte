@@ -27,6 +27,8 @@
   export let customApiConfig: any;
   export let tocPageCount: number;
   export let isPreviewMode: boolean;
+  // 编辑模式页面网格中框选的唯一页码（多选/未选为 null），供"智能添加书签"使用
+  export let gridSelectedPage: number | null = null;
 
   const dispatch = createEventDispatcher();
   export let tocEditor: any = undefined;
@@ -136,6 +138,7 @@
       insertAtPage={config.insertAtPage}
       apiConfig={customApiConfig}
       {tocPageCount}
+      {gridSelectedPage}
     />
   {/key}
 </div>

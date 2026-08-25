@@ -159,6 +159,19 @@
     originalPdfInstance?.numPages || pdfState.totalPages || 0,
   );
 
+  // 编辑模式页面网格中框选的"唯一页"：
+  // 用户在网格拖选会更新 tocRanges[activeRangeIndex] 的 start/end，
+  // 仅当 start === end（只选了一页）时才视为智能添加书签的有效目标；
+  // 多选或未选传 null 禁用按钮。
+  // hasUserSelectedGridPage 用于区分"默认初始区间 1~1"和"用户真实框选"：
+  // 只有用户在网格上拖选 / 修改范围后标志才置位，避免一进页面级别按钮就处于可用状态。
+  let hasUserSelectedGridPage = false;
+  $: activeTocRange = tocRanges[activeRangeIndex] || null;
+  $: gridSelectedPage =
+    hasUserSelectedGridPage && activeTocRange && activeTocRange.start === activeTocRange.end
+      ? activeTocRange.start
+      : null;
+
   onMount(async () => {
     init('A-US-0422911470', {
       appVersion: '1.0.0',
@@ -1152,6 +1165,8 @@
 
   const handleUpdateActiveRange = (e: CustomEvent) => {
     const {start, end} = e.detail;
+    // 网格拖选会走到这里，标记用户已真实框选过页面
+    hasUserSelectedGridPage = true;
     if (activeRangeIndex >= 0 && activeRangeIndex < tocRanges.length) {
       if (start !== undefined) tocRanges[activeRangeIndex].start = start;
       if (end !== undefined) tocRanges[activeRangeIndex].end = end;
@@ -1186,10 +1201,14 @@
 
   const handleSetActiveRange = (e: CustomEvent) => {
     activeRangeIndex = e.detail.index;
+    // 用户主动切换/操作了范围选择，视为有效的网格选页来源
+    hasUserSelectedGridPage = true;
   };
 
   const handleRangeChange = () => {
     tocRanges = [...tocRanges];
+    // 范围被用户修改（如直接在输入框改起止页），同样视为有效选页
+    hasUserSelectedGridPage = true;
   };
 
   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -1336,6 +1355,7 @@
       {customApiConfig}
       {tocPageCount}
       {isPreviewMode}
+      {gridSelectedPage}
       bind:tocRanges
       bind:activeRangeIndex
       bind:addPhysicalTocPage

@@ -28,6 +28,9 @@
   export let pageOffset = 0;
   export let insertAtPage = 2;
   export let tocPageCount = 0;
+  // 编辑模式（页面网格）下用户框选的唯一页码（原始 PDF 内容物理页）；
+  // 多选（start<end）或未选择时为 null。由 +page.svelte 根据 tocRanges 计算传入。
+  export let gridSelectedPage: number | null = null;
 
   export let apiConfig = createEmptyApiConfig();
   const dispatch = createEventDispatcher();
@@ -779,6 +782,117 @@
     focusNewItemTitle(newItem.id);
   };
 
+  // ---- 智能添加书签 ----
+  /**
+   * 计算当前"所选页"对应的目录逻辑页码；无法确定唯一页时返回 null。
+   *
+   * 两种来源（用户在右侧操作）：
+   * - 预览模式：正在浏览的那一页（pdfState.currentPage，预览文档物理页，
+   *   可能包含插入的目录页偏移），需反向换算回内容逻辑页码。
+   * - 编辑模式：页面网格中框选的唯一页（gridSelectedPage，原始 PDF 内容物理页）。
+   *   多选或未选时上游传 null，直接禁用按钮。
+   *
+   * 换算关系来自 TocItem 的正向映射：
+   *   预览物理页 = (to + pageOffset) (+ tocPageCount，当内容物理页 >= insertAtPage)
+   */
+  $: smartInsertLogicalPage = (() => {
+    if (isPreview) {
+      if (!currentPage || currentPage < 1) return null;
+      const contentPhysical =
+        currentPage >= insertAtPage ? currentPage - tocPageCount : currentPage;
+      const logical = contentPhysical - pageOffset;
+      return logical >= 1 ? logical : null;
+    }
+    if (gridSelectedPage && gridSelectedPage >= 1) {
+      const logical = gridSelectedPage - pageOffset;
+      return logical >= 1 ? logical : null;
+    }
+    return null;
+  })();
+
+  /**
+   * 计算智能插入的扁平列表位置。核心原则：让新书签落在"页码顺序 + 层级归属"都正确的缝隙里。
+   *
+   * 依次尝试以下定位策略（targetLevel 为用户点选的书签级别，newPage 为所选页逻辑页码）：
+   * 1. 同级后继：第一个"同级且页码更大"的条目 → 插在它前面。
+   *    这同时天然避开了前一个同级条目的子树（子树在扁平列表中紧跟其后、
+   *    且都在新条目之前），例如插到 1.2 的子树之后、1.3 之前。
+   * 2. 同级前驱：最后一个"同级且页码不晚于 newPage"的条目 → 跳过它的整个子树后插入，
+   *    成为它的紧邻兄弟（而不是误入其子树或截断后续层级）。
+   * 3. 无同级参照：找页码不晚于 newPage 的最近上一级条目 → 插到它子树的末尾，
+   *    成为它的最后一个子节点（对应"放到第 1 章下面"的需求）。
+   * 4. 兜底：插到第一个"层级不超过目标且页码更大"的条目前；都没有则追加到末尾。
+   *    （buildTreeFromFlat 内部的 normalize 会把无父可依的深层级自动降级挂靠，保证结构合法。）
+   */
+  function computeSmartInsertIndex(flatItems: FlatTocItem[], targetLevel: number, newPage: number): number {
+    // 策略 1：同级后继
+    for (let i = 0; i < flatItems.length; i++) {
+      if (flatItems[i].level === targetLevel && flatItems[i].to > newPage) return i;
+    }
+
+    // 策略 2：同级前驱 → 其子树之后
+    let prevSameIdx = -1;
+    for (let i = 0; i < flatItems.length; i++) {
+      if (flatItems[i].level === targetLevel && flatItems[i].to <= newPage) prevSameIdx = i;
+    }
+    if (prevSameIdx >= 0) {
+      let j = prevSameIdx + 1;
+      while (j < flatItems.length && flatItems[j].level > targetLevel) j++;
+      return j;
+    }
+
+    // 策略 3：无同级 → 最近上一级的子树末尾
+    if (targetLevel > 1) {
+      let parentIdx = -1;
+      for (let i = 0; i < flatItems.length; i++) {
+        if (flatItems[i].level === targetLevel - 1 && flatItems[i].to <= newPage) parentIdx = i;
+      }
+      if (parentIdx >= 0) {
+        let j = parentIdx + 1;
+        while (j < flatItems.length && flatItems[j].level > targetLevel - 1) j++;
+        return j;
+      }
+    }
+
+    // 策略 4：兜底
+    for (let i = 0; i < flatItems.length; i++) {
+      if (flatItems[i].level <= targetLevel && flatItems[i].to > newPage) return i;
+    }
+    return flatItems.length;
+  }
+
+  /**
+   * 智能添加书签：以右侧所选页为页码，按用户指定的级别插入到最合适的位置。
+   * 插入后新条目自动成为焦点锚点并聚焦标题输入框，方便立即命名。
+   */
+  const smartInsertBookmark = (targetLevel: number) => {
+    const newPage = smartInsertLogicalPage;
+    if (!newPage) return;
+
+    saveHistory();
+    const flatItems = flattenTocItems($tocItems);
+    const uid = new ShortUniqueId({length: 10});
+    const newItem: FlatTocItem = {
+      id: uid.randomUUID(),
+      title: '',
+      to: newPage,
+      open: true,
+      level: targetLevel,
+      parentId: null,
+    };
+
+    const insertIndex = computeSmartInsertIndex(flatItems, targetLevel, newPage);
+    const newFlatItems = [
+      ...flatItems.slice(0, insertIndex),
+      newItem,
+      ...flatItems.slice(insertIndex),
+    ];
+
+    $tocItems = buildTreeFromFlat(newFlatItems);
+    focusedItemId = newItem.id;
+    focusNewItemTitle(newItem.id);
+  };
+
   const toggleAll = (open: boolean) => {
     flipDurationMs = 0;
     const updateRecursive = (items: TocEntry[]): TocEntry[] =>
@@ -1129,26 +1243,55 @@
       使用 sticky bottom-0 将整条按钮钉在滚动视口底部——目录再长、滚到多深，
       按钮都始终可见，解决旧版"按钮在目录末尾、识别出目录后基本看不到"的问题。
       半透明白底 + 毛玻璃，避免与下方滚过的列表文字混叠。
+      第一行：基于焦点锚点的上/下方插入；第二行：基于右侧所选页的智能添加书签。
     -->
     <div
-      class="sticky bottom-0 z-30 flex items-center gap-2 ml-12 mt-3 py-2 px-1 -mx-1 bg-white/90 backdrop-blur-sm rounded-lg"
+      class="sticky bottom-0 z-30 ml-12 mt-3 py-2 px-1 -mx-1 bg-white/90 backdrop-blur-sm rounded-lg"
     >
-      <button
-        on:click={() => insertTocItemAtAnchor('below')}
-        class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
-        title={$t('toc.insert_below_hint')}
-      >
-        {$t('btn.add_chapter')}
-      </button>
-      <!-- 上方插入：必须先单击某条目录形成焦点锚点才可用 -->
-      <button
-        on:click={() => insertTocItemAtAnchor('above')}
-        disabled={!focusedItemId}
-        class="btn font-bold bg-violet-300 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 disabled:cursor-not-allowed"
-        title={focusedItemId ? $t('toc.insert_above_hint') : $t('toc.insert_need_focus')}
-      >
-        {$t('toc.insert_above')}
-      </button>
+      <div class="flex items-center gap-2">
+        <button
+          on:click={() => insertTocItemAtAnchor('below')}
+          class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
+          title={$t('toc.insert_below_hint')}
+        >
+          {$t('btn.add_chapter')}
+        </button>
+        <!-- 上方插入：必须先单击某条目录形成焦点锚点才可用 -->
+        <button
+          on:click={() => insertTocItemAtAnchor('above')}
+          disabled={!focusedItemId}
+          class="btn font-bold bg-violet-300 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 disabled:cursor-not-allowed"
+          title={focusedItemId ? $t('toc.insert_above_hint') : $t('toc.insert_need_focus')}
+        >
+          {$t('toc.insert_above')}
+        </button>
+      </div>
+
+      <!--
+        智能添加书签行：
+        左侧为功能说明文案；右侧 4 个级别按钮对应 1~4 级书签。
+        仅当右侧确定了唯一目标页（预览模式的当前页 / 编辑模式网格框选的单页）时才可用；
+        点击后按页码 + 级别自动计算插入位置（见 computeSmartInsertIndex）。
+      -->
+      <div class="flex items-center gap-2 mt-2">
+        <span class="text-xs font-semibold text-gray-600 select-none">
+          {$t('toc.smart_add_label')}
+        </span>
+        <div class="flex items-center gap-1.5 ml-auto">
+          {#each [1, 2, 3, 4] as level (`${level}`)}
+            <button
+              on:click={() => smartInsertBookmark(level)}
+              disabled={!smartInsertLogicalPage}
+              class="btn font-bold text-xs bg-blue-300 text-black border-2 border-black rounded-lg px-3 py-1.5 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 disabled:cursor-not-allowed"
+              title={smartInsertLogicalPage
+                ? $t('toc.smart_add_hint', {values: {level, page: smartInsertLogicalPage}})
+                : $t('toc.smart_add_no_page')}
+            >
+              {$t('toc.smart_add_level', {values: {level}})}
+            </button>
+          {/each}
+        </div>
+      </div>
     </div>
   </div>
 </div>
