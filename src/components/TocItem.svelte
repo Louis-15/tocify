@@ -92,10 +92,15 @@
     }
   }
 
+  // 页码输入框内容变化时触发（包括点击上下调整按钮）。
+  // 实时把右侧预览/网格跳到该页码对应的位置，让用户边调页码边看效果。
+  // 注意：逻辑页码可能因页码偏移量为负，这里不能限制 > 0，
+  // 否则负数页码时预览完全不响应（"连闪都不闪"的 bug 根因）。
+  // 换算成物理页和边界裁剪由下游 +page.svelte 的 jumpToPage 处理。
   function handlePageInput(e: Event) {
     const target = e.target as HTMLInputElement;
     const val = parseInt(target.value, 10);
-    if (!isNaN(val) && val > 0) {
+    if (!isNaN(val)) {
       dispatch('jumpToPage', {to: val});
     }
   }
@@ -261,10 +266,19 @@
   // 这两个输入框占据条目的绝大部分面积，若只允许点行空白处才能聚焦，
   // 用户几乎每次点击都落在输入框上，焦点功能会形同虚设。
   // Shift+点击的范围多选仍由 handleShiftSelectFromInput 在 mousedown 阶段处理，这里直接放行。
+  //
+  // 重要：跳页目标用 editPage（输入框当前显示值）而非 item.to（书签保存的旧页码）。
+  // 点击页码上下调整按钮时，bind:value 会先把 editPage 更新为新值，
+  // 随后 click 事件读到的 editPage 就是新值——避免和 handlePageInput 竞争时
+  // 用旧页码覆盖新页码，导致"页面闪一下又回到原来"的 bug。
   function handleInputClick(event: MouseEvent) {
     if (event.shiftKey) return;
     onFocus(item);
-    dispatch('jumpToPage', {to: item.to});
+    const target = event.target as HTMLInputElement;
+    const pageVal = target.type === 'number' ? editPage : item.to;
+    if (!isNaN(pageVal)) {
+      dispatch('jumpToPage', {to: pageVal});
+    }
   }
 
   function handleSelectionDotMouseDown(event: MouseEvent) {

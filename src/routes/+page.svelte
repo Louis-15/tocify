@@ -1149,13 +1149,17 @@
   };
 
   const jumpToPage = (page: number) => {
-    if (page > 0 && page <= (pdfState.totalPages || originalPdfInstance?.numPages || Infinity)) {
-      if (isPreviewMode) {
-        pdfState.currentPage = page;
-        pdfState = {...pdfState};
-      } else {
-        highlightPageNum = page;
-      }
+    // 物理页码可能因页码偏移量换算后 ≤0 或超过总页数。
+    // 旧逻辑用 page > 0 硬限制，导致负数页码时预览完全不响应（"连闪都不闪"）。
+    // 这里改为夹到有效范围 [1, totalPages]：负数/0 夹到第 1 页，超界夹到最后一页，
+    // 让预览始终有可见反馈，用户能直观感知页码偏移是否设过头了。
+    const totalPages = pdfState.totalPages || originalPdfInstance?.numPages || Infinity;
+    const clampedPage = Math.max(1, Math.min(page, totalPages));
+    if (isPreviewMode) {
+      pdfState.currentPage = clampedPage;
+      pdfState = {...pdfState};
+    } else {
+      highlightPageNum = clampedPage;
     }
   };
   const debouncedJumpToPage = debounce(jumpToPage, 300);
