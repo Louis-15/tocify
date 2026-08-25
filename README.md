@@ -1,15 +1,42 @@
-<h1>
-  Tocify
-  <img src="https://raw.githubusercontent.com/anig1scur/tocify/refs/heads/main/static/favicon.svg" width="36" />
-</h1>
+﻿# Tocify
 
-Tocify is a free, online and open-source web application to add, edit, or generate Table of Contents (ToCs) / bookmarks for PDFs. It uses AI to parse scanned directory images or raw text into structured outlines, and creates clickable bookmarks & printable TOC pages for PDFs in cross platforms.
+一个免费、开源、在线运行的 Web 应用，用于给 PDF 添加、编辑或生成目录（Table of Contents）/ 书签。它利用 AI 解析扫描的目录图片或原始文本为结构化大纲，并在跨平台生成可点击的书签与可打印的目录页。
 
-</div>
+> **本项目** 基于 [anig1scur/tocify](https://github.com/anig1scur/tocify)（GPL-3.0）修改而来，在原仓库基础上新增了若干改进。
 
+---
+
+## 在本版中的改进
+
+### 1. 支持聚合 AI 平台的 API 提供商
+
+原仓库虽然允许填写自定义 API，但接入聚合平台（如 OpenCodeGo、Command Code 等）时往往用不了。本版修复了这一问题，现在可以**自由接入这类聚合 AI 的 API 提供商**，在网页端即可正常使用。
+
+#### ⚠️ Base URL 填写注意事项
+
+接入 OpenAI 兼容接口时，**Base URL 只需写到 `/v1` 即可，不要填写 `/chat/completions`**，软件会自动补全后面的路径。
+
+| 写什么 | 是否正确 |
+|--------|----------|
+| `https://api.example.com/v1` | ✅ 正确 |
+| `https://api.example.com/v1/chat/completions` | ❌ 错误（多写路径易导致请求失败） |
+
+### 2. 智能添加书签
+
+在右侧选中/翻页到某一页后，点击对应级别的按钮，书签会根据其页码与级别，自动插入到正确的位置。
+
+- 从 **1级 / 2级 / 3级 / 4级** 中选择书签的级别
+- 系统自动按"页码顺序 + 层级归属"确定插入点，无需手动拖拽
+- 例：一个 2 级书签在 52 页，系统会找到页码相近的 2 级同级书签，把它插到正确位置；若无同级参照，则归入页码最近且在它之前的上一级书签下
+- 支持为目录之前的前言、序言等页面添加书签（负数逻辑页码也可正常添加）
+
+### 3. 修改页码时实时切换
+
+编辑书签页码时，右侧（无论是预览模式还是编辑模式的页面网格）都会**实时切换到对应页面**，方便边改边核对，不需要手动翻页。
+
+---
 
 ## Usage
-
 
 <https://github.com/user-attachments/assets/48e09103-f3a8-4d13-afeb-d11b5c8ade44>
 
@@ -27,8 +54,47 @@ Tocify is a free, online and open-source web application to add, edit, or genera
 
 <img src="./screenshots/style.png" alt="Edit style" width="100%"/>
 
+---
+
+## 使用流程
+
+### 方式一：AI 自动生成目录（推荐）
+
+1. **加载 PDF**：点击「上传你的 PDF」，选择本地 PDF 文件（或直接拖拽到区域）。
+2. **选择目录页范围**：在右侧页面网格中，拖动选择包含目录的页面（通常是前几页）。可添加多个范围。
+3. **生成目录**：点击「从所选页面生成目录」按钮，AI 会识别目录图片并生成结构化书签。
+   - 若数量较多，会自动分批识别并在进度条中显示进度。
+4. **校准页码偏移**（如果 AI 识别页不准）：点击首页条目，按提示选择该章节实际对应的物理页码。
+5. **检查与修改**：在左侧编辑器中核对每个书签的标题与页码，可拖动调整层级、点页码输入框用上下按钮微调（右侧会实时跳页），或手动增加、删除书签。
+6. **导出 PDF**：点击「导出 PDF」生成带有可点击目录的新 PDF。
+
+### 方式二：手动添加书签
+
+1. **加载 PDF** 后，在左侧编辑器底部点击「在下方插入」新增一条书签，输入标题与页码。
+2. 也可先单击某条书签聚焦它，再点「在上方插入」，新书签会插入到该条目的上方。
+3. **智能添加书签**：在右侧选中某一页（预览模式翻到该页，或编辑模式框选单独一页），点击对应的「1级 / 2级 / 3级 / 4级」按钮，系统会按页码与层级自动定位插入。
+4. 重复直至完成所有条目，再点「导出 PDF」。
+
+### 其他说明
+
+- **页码偏移**：当 PDF 标注页码与实际页码不一致时，可在「目录设置」中调整「页码偏移量」，或在生成后通过首个目录项校准。
+- **OCR 工具**：对于无目录的纯扫描件，可访问 `/ocr` 页面生成可搜索的双层 PDF，配合 AI 识别文本目录。
+
+---
+
+## 开源协议
+
+本项目基于 [anig1scur/tocify](https://github.com/anig1scur/tocify)（GPL-3.0）修改而来，并**整体使用 [GPL-3.0](./LICENSE)** 许可证发布。
+
+- 你可以自由使用、修改、再分发
+- 衍生作品必须继续以 GPL-3.0 开源
+- 详见 [LICENSE](./LICENSE) 文件
+
+---
 
 ## Support me
+
+原作者的赞赏方式（支付宝 / ko-fi）：
 
 You can support me by Alipay (scan QR code below) or [ko-fi](https://ko-fi.com/aerisz):
 

@@ -73,14 +73,12 @@
       </div>
 
       <div class="flex flex-col gap-6">
-        <video
-          src={'/videos/demo.mp4'}
-          controls
-          loop
-          autoplay
-          muted
-          class="w-full h-auto rounded-md"
-        ></video>
+        <!-- 内嵌 README 使用说明（static/readme.html），替代原演示视频 -->
+        <iframe
+          src="/readme.html"
+          class="w-full h-[70vh] rounded-md border-2 border-gray-200"
+          title="Tocify 使用说明"
+        ></iframe>
       </div>
     </div>
   </div>
