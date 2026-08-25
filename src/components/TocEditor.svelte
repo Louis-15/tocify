@@ -1281,7 +1281,7 @@
       <div class="flex items-center gap-2">
         <button
           on:click={() => insertTocItemAtAnchor('below')}
-          class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
+          class="btn font-bold bg-yellow-400 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex-1 w-full"
           title={$t('toc.insert_below_hint')}
         >
           {$t('btn.add_chapter')}
@@ -1290,7 +1290,7 @@
         <button
           on:click={() => insertTocItemAtAnchor('above')}
           disabled={!focusedItemId}
-          class="btn font-bold bg-violet-300 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 disabled:cursor-not-allowed"
+          class="btn font-bold bg-violet-300 text-black border-2 border-black rounded-lg px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex-1 w-full disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 disabled:cursor-not-allowed"
           title={focusedItemId ? $t('toc.insert_above_hint') : $t('toc.insert_need_focus')}
         >
           {$t('toc.insert_above')}
@@ -1305,14 +1305,15 @@
         仅当右侧确定了唯一目标页（预览模式的当前页 / 编辑模式网格框选的单页）时按钮才可用；
         点击后按页码 + 级别自动计算插入位置（见 computeSmartInsertIndex）。
       -->
-      <div class="flex items-center gap-2 mt-2">
+      <div class="flex items-center gap-3 mt-2">
         <Tooltip
           text={$t('toc.smart_add_tooltip')}
           position="top"
           width="md:w-[340px] w-[240px]"
           color="bg-white/90"
+          constrainToViewport={true}
         >
-          <span class="text-xs font-semibold text-gray-600 select-none cursor-help">
+          <span class="text-sm font-semibold text-gray-700 select-none cursor-help whitespace-nowrap">
             {$t('toc.smart_add_label')}
           </span>
         </Tooltip>

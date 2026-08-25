@@ -7,6 +7,10 @@
   export let position = 'top';
   export let width = 'w-48';
   export let isTextCopiable = false;
+  // 是否将气泡限制在视口内（防止靠近窗口边缘时气泡溢出不可见）。
+  // 开启后会在显示时用 JS 测量气泡与视口边界，必要时平移气泡使其完全可见。
+  // 仅对非自定义位置（top/bottom/left/right）生效。
+  export let constrainToViewport = false;
 
   export let color = 'bg-gradient-to-tr from-blue-300/70 to-pink-300/60 ';
 
@@ -29,6 +33,26 @@
     isVisible = false;
     setTimeout(() => (isCopied = false), 300);
   };
+
+  // constrainToViewport 模式下，气泡插入 DOM 的瞬间同步测量并修正位置，
+  // 确保不超出视口。通过 Svelte action（use:）实现——action 在元素首次插入 DOM 时
+  // 同步执行，早于 transition 的任何渲染帧，因此过渡动画会直接从修正后的位置开始播放，
+  // 不会出现"先溢出再跳回"的闪烁。
+  function constrainAction(node) {
+    if (!constrainToViewport) return;
+    const rect = node.getBoundingClientRect();
+    const padding = 8; // 距视口边缘留 8px 安全间距
+    let shiftX = 0;
+    if (rect.left < padding) {
+      shiftX = padding - rect.left; // 左溢出 → 右移
+    } else if (rect.right > window.innerWidth - padding) {
+      shiftX = (window.innerWidth - padding) - rect.right; // 右溢出 → 左移
+    }
+    if (shiftX !== 0) {
+      // 覆盖默认的 -translate-x-1/2 居中偏移：改为 calc(-50% + shiftXpx)
+      node.style.transform = `translateX(calc(-50% + ${shiftX}px))`;
+    }
+  }
 
   const copyText = () => {
     navigator.clipboard.writeText(text);
@@ -88,6 +112,7 @@
       on:mouseenter={setVisible}
       on:mouseleave={delay(setInVisible)}
       on:click={isTextCopiable ? copyText : null}
+      use:constrainAction
       style={customStyle}
       class={`
         absolute z-50 p-2 md:px-4 md:py-3 font-mono text-sm text-gray-900 border-2 border-black
