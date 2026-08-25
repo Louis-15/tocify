@@ -801,11 +801,14 @@
       const contentPhysical =
         currentPage >= insertAtPage ? currentPage - tocPageCount : currentPage;
       const logical = contentPhysical - pageOffset;
-      return logical >= 1 ? logical : null;
+      // 允许负数/0 逻辑页码：前言、序言等目录之前的页面，经页码偏移量换算后
+      // 逻辑页码可能是负数或 0，这是正常情况，应允许为其添加书签。
+      // 旧逻辑用 logical >= 1 判定，导致这类页面时按钮被禁用（bug）。
+      return Number.isFinite(logical) ? logical : null;
     }
     if (gridSelectedPage && gridSelectedPage >= 1) {
       const logical = gridSelectedPage - pageOffset;
-      return logical >= 1 ? logical : null;
+      return Number.isFinite(logical) ? logical : null;
     }
     return null;
   })();

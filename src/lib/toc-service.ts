@@ -7,8 +7,13 @@ import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
 
 import {pdfService} from '../stores';
 
+// 分块大小：每批最多发给 AI 的页面数。
+// 旧值 8 意味着 ≤8 页一次性识别，四五页目录不分块，单次输出 JSON 容易触发
+// 模型自身的 token 上限被截断。改为 4：5 页会分成 4+1 两批，每批输出量更小，
+// 降低被截断的风险；同时每批识别完立即回调进度，让用户看到逐批累积的过程。
+export const CHUNK_SIZE = 4;
+// 需要自带 API Key 的页数阈值（超过该页数且未提供 key 时提示用户）
 export const LARGE_PAGE_THRESHOLD = 8;
-export const CHUNK_SIZE = 8;
 
 export const ERROR_NEEDS_API_KEY = 'NEEDS_API_KEY';
 
@@ -159,7 +164,10 @@ export async function generateToc(
   const chunkFailures: ChunkFailure[] = [];
   let completedChunks = 0;
 
-  const chunkPromises = chunks.map(async (chunk, i) => {
+  // 串行逐批处理（而非并行）：每批识别完立即回调进度，让用户看到"逐批累积"的过程；
+  // 同时避免并行请求触发 API 限流。每批失败会重试一次，最终按原始顺序合并所有批次结果。
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
     const chunkStart = chunk[0].pageNum;
     const chunkEnd = chunk[chunk.length - 1].pageNum;
     const images = chunk.map(e => e.image);
@@ -188,9 +196,7 @@ export async function generateToc(
 
     completedChunks++;
     onProgress?.(completedChunks, totalChunks);
-  });
-
-  await Promise.allSettled(chunkPromises);
+  }
 
   const mergedItems = allItems.flatMap(r => (Array.isArray(r) ? r : []));
 

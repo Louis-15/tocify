@@ -636,9 +636,10 @@ async function requestVisionJson(config: DirectApiConfig, systemPrompt: string, 
     ],
   };
 
-  if (provider !== 'zhipu') {
-    visionBody.max_completion_tokens = 4096;
-  }
+  // 不设置 max_completion_tokens：让模型使用其自身的默认输出上限，
+  // 与 Gemini 分支保持一致。旧版硬编码 4096（后改 16384）会导致长目录被截断，
+  // 只识别出一部分。去掉限制后，由各模型 API 自行按其能力上限输出，
+    // 主流视觉模型默认上限远大于 4096，足以覆盖大目录。
 
   return fetchOpenAiCompatJson(
     getOpenAiCompatBaseUrl(provider, config),
