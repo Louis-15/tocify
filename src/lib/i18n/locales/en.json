@@ -120,7 +120,8 @@
     "insert_below_hint": "Click a ToC entry to focus it, then insert a new sibling entry right below it",
     "insert_above_hint": "Insert a new sibling entry right above the focused entry",
     "insert_need_focus": "Click a ToC entry first to set the insertion anchor",
-    "smart_add_label": "Smart Add: pick a page on the right, then click a level button — the bookmark lands in the right spot automatically",
+    "smart_add_label": "Smart Add",
+    "smart_add_tooltip": "Smart Add Bookmark\nPick a page on the right (navigate to it in preview, or drag-select a single page in the grid), then click the matching level button below. The bookmark is placed automatically based on its page and level.",
     "smart_add_level": "Lv.{level}",
     "smart_add_hint": "Will insert a level-{level} bookmark at page {page}; position is calculated automatically",
     "smart_add_no_page": "Navigate to the target page in preview, or drag-select a single page in the grid first"

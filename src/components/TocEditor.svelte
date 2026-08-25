@@ -824,41 +824,50 @@
    * 4. 兜底：插到第一个"层级不超过目标且页码更大"的条目前；都没有则追加到末尾。
    *    （buildTreeFromFlat 内部的 normalize 会把无父可依的深层级自动降级挂靠，保证结构合法。）
    */
+  /**
+   * 计算智能插入的扁平列表位置。
+   *
+   * 核心思路（逐级确定祖先）：从 1 级开始，逐级向下检测，直到目标层级。
+   * 每一级都在当前已确定的祖先子树范围内，找"页码不晚于 newPage 的最后一个该级条目"作为这一级的祖先，
+   * 然后把搜索范围缩小到它的子树。这样无论目录有多深、跨了多少个子树，都能彻底搞清楚新条目的归属。
+   *
+   * 例：插 3 级书签时，先确定它归哪个 1 级（第几章），再在该章范围内确定归哪个 2 级（第几节），
+   * 最后在该节范围内找 3 级的精确插入点。避免了旧版"只看相邻层级、跨子树时挂错父节点"的 bug。
+   *
+   * 边界：
+   * - 某级找不到合适祖先时，新条目插在当前范围起点；buildTreeFromFlat 的 normalize 会把
+   *   无父可依的深层级自动降级挂靠（如没有 2 级祖先时，3 级条目降为 2 级挂在 1 级下），保证结构合法。
+   * - 空目录时返回 0，插在开头。
+   */
   function computeSmartInsertIndex(flatItems: FlatTocItem[], targetLevel: number, newPage: number): number {
-    // 策略 1：同级后继
-    for (let i = 0; i < flatItems.length; i++) {
+    // rangeStart/rangeEnd：当前确定的祖先子树在扁平列表中的范围（不含祖先本身）
+    let rangeStart = 0;
+    let rangeEnd = flatItems.length;
+
+    // 从 1 级逐级检测到 targetLevel-1 级，每级确定一个祖先并缩小范围到其子树
+    for (let lvl = 1; lvl < targetLevel; lvl++) {
+      // 在当前范围内找最后一个 level===lvl 且 to<=newPage 的条目，作为这一级的祖先
+      let ancestorIdx = -1;
+      for (let i = rangeStart; i < rangeEnd; i++) {
+        if (flatItems[i].level === lvl && flatItems[i].to <= newPage) ancestorIdx = i;
+      }
+      // 该层级没有合适祖先 → 新条目无法挂到 targetLevel 级，
+      // 插在当前范围起点，由 buildTreeFromFlat 自动降级处理
+      if (ancestorIdx === -1) return rangeStart;
+
+      // 缩小范围到该祖先的子树（子树 = 祖先之后、到下一个不比它深的条目之前）
+      rangeStart = ancestorIdx + 1;
+      rangeEnd = ancestorIdx + 1;
+      while (rangeEnd < flatItems.length && flatItems[rangeEnd].level > lvl) rangeEnd++;
+    }
+
+    // 此时 [rangeStart, rangeEnd) 是 targetLevel-1 级祖先的子树范围
+    // 在该范围内找插入位置：第一个"同级且页码更大"的条目前（策略：同级后继）
+    for (let i = rangeStart; i < rangeEnd; i++) {
       if (flatItems[i].level === targetLevel && flatItems[i].to > newPage) return i;
     }
-
-    // 策略 2：同级前驱 → 其子树之后
-    let prevSameIdx = -1;
-    for (let i = 0; i < flatItems.length; i++) {
-      if (flatItems[i].level === targetLevel && flatItems[i].to <= newPage) prevSameIdx = i;
-    }
-    if (prevSameIdx >= 0) {
-      let j = prevSameIdx + 1;
-      while (j < flatItems.length && flatItems[j].level > targetLevel) j++;
-      return j;
-    }
-
-    // 策略 3：无同级 → 最近上一级的子树末尾
-    if (targetLevel > 1) {
-      let parentIdx = -1;
-      for (let i = 0; i < flatItems.length; i++) {
-        if (flatItems[i].level === targetLevel - 1 && flatItems[i].to <= newPage) parentIdx = i;
-      }
-      if (parentIdx >= 0) {
-        let j = parentIdx + 1;
-        while (j < flatItems.length && flatItems[j].level > targetLevel - 1) j++;
-        return j;
-      }
-    }
-
-    // 策略 4：兜底
-    for (let i = 0; i < flatItems.length; i++) {
-      if (flatItems[i].level <= targetLevel && flatItems[i].to > newPage) return i;
-    }
-    return flatItems.length;
+    // 没有同级后继 → 插在该子树末尾（成为最后一个子节点）
+    return rangeEnd;
   }
 
   /**
@@ -888,7 +897,28 @@
       ...flatItems.slice(insertIndex),
     ];
 
-    $tocItems = buildTreeFromFlat(newFlatItems);
+    // 自动展开新条目的所有祖先节点，让新插入的子级书签立即可见。
+    // 思路：在扁平列表里，新条目的祖先就是它前面那些"层级比它浅"的条目中，
+    // 距离它最近的各级祖先。这里用栈模拟深度优先的父子关系来收集祖先 id。
+    // buildTreeFromFlat 的 forceOpenIds 参数会让这些祖先节点强制 open=true。
+    const forceOpenIds = new Set<string>();
+    if (targetLevel > 1) {
+      const ancestorStack: {level: number; id: string}[] = [];
+      for (let i = 0; i < insertIndex; i++) {
+        const fi = newFlatItems[i];
+        // 弹出栈顶所有层级不比当前浅的节点（它们不是 fi 的祖先）
+        while (ancestorStack.length > 0 && ancestorStack[ancestorStack.length - 1].level >= fi.level) {
+          ancestorStack.pop();
+        }
+        ancestorStack.push({level: fi.level, id: fi.id});
+      }
+      // 此时栈中从底到顶就是新条目的祖先链（不含新条目本身）
+      for (const ancestor of ancestorStack) {
+        if (ancestor.level < targetLevel) forceOpenIds.add(ancestor.id);
+      }
+    }
+
+    $tocItems = buildTreeFromFlat(newFlatItems, forceOpenIds);
     focusedItemId = newItem.id;
     focusNewItemTitle(newItem.id);
   };
@@ -1269,14 +1299,23 @@
 
       <!--
         智能添加书签行：
-        左侧为功能说明文案；右侧 4 个级别按钮对应 1~4 级书签。
-        仅当右侧确定了唯一目标页（预览模式的当前页 / 编辑模式网格框选的单页）时才可用；
+        左侧仅保留"智能添加书签"短文案，并用 Tooltip 包裹它——
+        悬浮在该文案上才显示详细使用说明气泡；4 个级别按钮不触发气泡。
+        右侧 4 个级别按钮对应 1~4 级书签。
+        仅当右侧确定了唯一目标页（预览模式的当前页 / 编辑模式网格框选的单页）时按钮才可用；
         点击后按页码 + 级别自动计算插入位置（见 computeSmartInsertIndex）。
       -->
       <div class="flex items-center gap-2 mt-2">
-        <span class="text-xs font-semibold text-gray-600 select-none">
-          {$t('toc.smart_add_label')}
-        </span>
+        <Tooltip
+          text={$t('toc.smart_add_tooltip')}
+          position="top"
+          width="md:w-[340px] w-[240px]"
+          color="bg-white/90"
+        >
+          <span class="text-xs font-semibold text-gray-600 select-none cursor-help">
+            {$t('toc.smart_add_label')}
+          </span>
+        </Tooltip>
         <div class="flex items-center gap-1.5 ml-auto">
           {#each [1, 2, 3, 4] as level (`${level}`)}
             <button
