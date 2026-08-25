@@ -8,10 +8,12 @@ export const LIMIT_CONFIG = {
   MAX_TEXT_SIZE_KB: 128
 };
 
-const redis = new Redis({
-  url: env.UPSTASH_REDIS_REST_URL,
-  token: env.UPSTASH_REDIS_REST_TOKEN,
-});
+const UPSTASH_URL = env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = env.UPSTASH_REDIS_REST_TOKEN;
+
+const redis = UPSTASH_URL && UPSTASH_TOKEN
+  ? new Redis({ url: UPSTASH_URL, token: UPSTASH_TOKEN })
+  : null;
 
 export function getClientIp(request: Request): string {
   const headers = request.headers;
@@ -32,6 +34,11 @@ export async function checkRateLimit(
   const clientIp = getClientIp(request);
 
   if (clientIp !== 'unknown') {
+    if (!redis) {
+      // No Upstash configured (e.g. local dev). Do not enforce a rate limit.
+      return null;
+    }
+
     const ratelimit = new Ratelimit({
       redis: redis,
       limiter: Ratelimit.fixedWindow(limitCount, '24 h'),

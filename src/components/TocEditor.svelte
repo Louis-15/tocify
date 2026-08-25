@@ -14,7 +14,6 @@
     Search,
   } from 'lucide-svelte';
   import {t} from 'svelte-i18n';
-  import {processTocDirect} from '$lib/llm/client';
   import TocItem from './TocItem.svelte';
   import Tooltip from './Tooltip.svelte';
   import {tocItems, maxPage, autoSaveEnabled, dragDisabled, curFileFingerprint} from '../stores';
@@ -526,38 +525,26 @@
     let aiResult;
 
     try {
-      if (apiConfig.apiKey) {
-        aiResult = await processTocDirect({
-          text,
+      const response = await fetch('/api/process-toc', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          text: text,
           apiKey: apiConfig.apiKey,
           provider: apiConfig.provider,
           customBaseUrl: apiConfig.customBaseUrl,
           doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
           doubaoEndpointIdVision: apiConfig.doubaoEndpointIdVision,
           modelOverrides: apiConfig.modelOverrides,
-        });
-      } else {
-        const response = await fetch('/api/process-toc', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            text: text,
-            apiKey: apiConfig.apiKey,
-            provider: apiConfig.provider,
-            customBaseUrl: apiConfig.customBaseUrl,
-            doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
-            doubaoEndpointIdVision: apiConfig.doubaoEndpointIdVision,
-            modelOverrides: apiConfig.modelOverrides,
-          }),
-        });
+        }),
+      });
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.message || 'AI processing failed');
-        }
-
-        aiResult = await response.json();
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || 'AI processing failed');
       }
+
+      aiResult = await response.json();
     } finally {
       isProcessing = false;
     }

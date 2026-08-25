@@ -2,7 +2,6 @@ import type * as PdfjsLibTypes from 'pdfjs-dist';
 import {get} from 'svelte/store';
 import {_} from 'svelte-i18n';
 
-import { processTocDirect } from '$lib/llm/client';
 import {requiresUserApiKeyForModel, type ModelOverrides} from '$lib/llm/core';
 import type {RecognitionIgnoreRegion} from '$lib/pdf/recognition-ignore';
 
@@ -56,19 +55,6 @@ async function fetchChunk(
 ): Promise<any[]> {
   if (requiresUserApiKeyForModel(provider, apiKey, modelOverrides)) {
     throw new Error(t('error.custom_model_needs_api_key'));
-  }
-
-  if (apiKey) {
-    return processTocDirect({
-      images,
-      apiKey,
-      provider,
-      customBaseUrl,
-      doubaoEndpointIdText,
-      doubaoEndpointIdVision,
-      modelOverrides,
-      visionPrompt,
-    });
   }
 
   const response = await fetch('/api/process-toc', {

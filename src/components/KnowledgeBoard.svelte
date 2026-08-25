@@ -2,7 +2,6 @@
   import {tick} from 'svelte';
   import {t} from 'svelte-i18n';
   import rough from 'roughjs';
-  import {generateBoardDirect} from '$lib/llm/client';
   import {createEmptyApiConfig, requiresUserApiKeyForModel} from '$lib/llm/core';
   import GraphNode from './GraphNode.svelte';
   import {
@@ -86,31 +85,23 @@
     }));
 
     try {
-      const data = apiConfig.apiKey
-        ? await generateBoardDirect(simplifiedItems, {
-          apiKey: apiConfig.apiKey,
-          provider: apiConfig.provider,
-          customBaseUrl: apiConfig.customBaseUrl,
-          doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
-          modelOverrides: apiConfig.modelOverrides,
-        })
-        : await (async () => {
-          const response = await fetch('/api/generate-board', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              tocItems: simplifiedItems,
-              apiKey: apiConfig.apiKey,
-              provider: apiConfig.provider,
-              customBaseUrl: apiConfig.customBaseUrl,
-              doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
-              modelOverrides: apiConfig.modelOverrides,
-            }),
-          });
+      const data = await (async () => {
+        const response = await fetch('/api/generate-board', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            tocItems: simplifiedItems,
+            apiKey: apiConfig.apiKey,
+            provider: apiConfig.provider,
+            customBaseUrl: apiConfig.customBaseUrl,
+            doubaoEndpointIdText: apiConfig.doubaoEndpointIdText,
+            modelOverrides: apiConfig.modelOverrides,
+          }),
+        });
 
-          if (!response.ok) throw new Error('API Failed');
-          return response.json();
-        })();
+        if (!response.ok) throw new Error('API Failed');
+        return response.json();
+      })();
 
       let nodes = data.nodes.map((n) => ({
         ...n,
