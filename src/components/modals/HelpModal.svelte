@@ -1,21 +1,8 @@
 <script lang="ts">
   import {fade, fly} from 'svelte/transition';
-  import {X, Send} from 'lucide-svelte';
+  import {X} from 'lucide-svelte';
 
   export let showHelpModal: boolean;
-
-  const email = 'anigiscur@gmail.com';
-  let copied = false;
-
-  const copyEmail = async () => {
-    try {
-      await navigator.clipboard.writeText(email);
-      copied = true;
-      setTimeout(() => (copied = false), 2000);
-    } catch (err) {
-      console.error('Failed to copy', err);
-    }
-  };
 </script>
 
 {#if showHelpModal}
@@ -30,35 +17,7 @@
       on:click|stopPropagation
     >
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <div class="flex flex-wrap items-center gap-4">
-          <h2 class="text-2xl font-black italic">How to Use Tocify</h2>
-
-          <span class=" font-bold border-l-2 border-black pl-4 ml-1 hidden sm:inline-block">
-            Feedback
-            <Send
-              size={18}
-              class="inline-block font-bold mr-1"
-            />
-          </span>
-
-          <button
-            on:click={copyEmail}
-            class=" relative overflow-hidden group flex items-center gap-2 px-3 py-1.5
-              text-xs font-bold uppercase tracking-wider
-              border-2 border-black rounded-md
-              {copied
-              ? 'bg-lime-400 text-black border-black cursor-default'
-              : 'bg-white text-black hover:bg-yellow-400 hover:text-black active:scale-95'}
-            "
-            title="Click to copy email"
-          >
-            {#if copied}
-              <span>COPIED!</span>
-            {:else}
-              <span>{email}</span>
-            {/if}
-          </button>
-        </div>
+        <h2 class="text-2xl font-black italic">Tocify 使用指南</h2>
 
         <button
           on:click={() => (showHelpModal = false)}
@@ -73,7 +32,7 @@
       </div>
 
       <div class="flex flex-col gap-6">
-        <!-- 内嵌 README 使用说明（static/readme.html），替代原演示视频 -->
+        <!-- 内嵌 README 使用说明（static/readme.html） -->
         <iframe
           src="/readme.html"
           class="w-full h-[70vh] rounded-md border-2 border-gray-200"

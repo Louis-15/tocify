@@ -3,93 +3,162 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tocify 使用说明</title>
+<title>Tocify 使用指南</title>
 <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    line-height: 1.7;
-    color: #1f2937;
-    padding: 24px 28px;
-    max-width: 860px;
-    margin: 0 auto;
-    background: #fff;
-  }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.7; color: #1f2937; padding: 24px 28px; max-width: 860px; margin: 0 auto; background: #fff; }
   h1 { font-size: 1.9rem; border-bottom: 2px solid #000; padding-bottom: 10px; }
   h2 { font-size: 1.4rem; margin-top: 32px; border-left: 5px solid #000; padding-left: 12px; }
   h3 { font-size: 1.15rem; margin-top: 22px; }
   blockquote { border-left: 4px solid #d1d5db; margin: 14px 0; padding: 6px 16px; background: #f9fafb; color: #374151; }
   code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.9em; }
+  pre { background: #f3f4f6; padding: 12px 16px; border-radius: 6px; overflow-x: auto; }
   table { border-collapse: collapse; margin: 14px 0; width: 100%; }
   th, td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; }
   th { background: #f3f4f6; }
   ul, ol { padding-left: 24px; }
   a { color: #2563eb; }
-  img { max-width: 100%; border-radius: 8px; }
+  img { max-width: 100%; border-radius: 8px; border: 1px solid #e5e7eb; margin: 8px 0; }
   hr { border: none; border-top: 1px solid #e5e7eb; margin: 28px 0; }
 </style>
 </head>
 <body>
-<h1>Tocify</h1>
-<p>一个免费、开源、在线运行的 Web 应用，用于给 PDF 添加、编辑或生成目录（Table of Contents）/ 书签。它利用 AI 解析扫描的目录图片或原始文本为结构化大纲，并在跨平台生成可点击的书签与可打印的目录页。</p>
-<blockquote><strong>本项目</strong> 基于 <a href="https://github.com/anig1scur/tocify">anig1scur/tocify</a>（GPL-3.0）修改而来，在原仓库基础上新增了若干改进。</blockquote>
-
-<h2>在本版中的改进</h2>
-
-<h3>1. 支持聚合 AI 平台的 API 提供商</h3>
-<p>原仓库虽然允许填写自定义 API，但接入聚合平台（如 OpenCodeGo、Command Code 等）时往往用不了。本版修复了这一问题，现在可以<strong>自由接入这类聚合 AI 的 API 提供商</strong>，在网页端即可正常使用。</p>
-<h4>⚠️ Base URL 填写注意事项</h4>
-<p>接入 OpenAI 兼容接口时，<strong>Base URL 只需写到 <code>/v1</code> 即可，不要填写 <code>/chat/completions</code></strong>，软件会自动补全后面的路径。</p>
+<h1>Tocify 使用指南（网页版）</h1>
+<p>一个免费、开源、在线的 PDF 目录（书签）生成工具。利用 AI 解析扫描版目录图片，自动生成可点击的书签与可打印的目录页。</p>
+<blockquote><strong>本项目</strong> 基于 <a href="https://github.com/anig1scur/tocify">anig1scur/tocify</a>（GPL-3.0）修改而来。</blockquote>
+<h2>准备工作</h2>
+<ul>
+<li><strong>电脑</strong>：Windows 10/11</li>
+<li><strong>网络</strong>：首次运行需要联网（安装依赖，后续除 AI 识别外可离线使用）</li>
+<li><strong>需要添加目录的扫描版 PDF</strong>：最好要有纸质目录页</li>
+</ul>
+<h2>一、解压与安装</h2>
+<ol>
+<li>下载 <code>Tocify-网页版.zip</code> 压缩包。</li>
+<li>将压缩包<strong>解压到任意目录</strong>（例如 <code>D:\Tocify</code>）。<strong>注意：建议不要解压到 <code>C:\Program Files</code> 等系统目录</strong>，因为程序需要读写权限。</li>
+<li>解压后出现以下文件：</li>
+</ol>
+<pre>Tocify/
+├── 启动Tocify.bat       ← 双击这个开始
+├── start-server.bat     ← 服务启动子脚本（勿动）
+├── src/                 ← 源码
+├── static/              ← 静态资源（含 OCR 模型）
+├── package.json ...
+└── ...</pre>
+<h2>二、启动服务</h2>
+<ol>
+<li>双击 <strong><code>启动Tocify.bat</code></strong>（首次运行会自动：检查 Node.js 环境（没有会提示你去 https://nodejs.org 下载安装）；自动安装 pnpm 和项目依赖（需联网，约 3-10 分钟，请耐心等待）；然后自动启动服务）</li>
+<li>服务启动成功后，<strong>自动打开浏览器</strong>访问 <code>http://localhost:5173</code></li>
+<li>若没自动打开，可手动在浏览器里输入 <code>http://localhost:5173</code></li>
+</ol>
+<blockquote><strong>关于窗口</strong>：双击脚本后会弹出<strong>两个窗口</strong>——第一个（启动器）会<strong>一闪而过</strong>，这是正常的；第二个标题为 <strong>「Tocify 服务窗口（关闭此窗口即停止服务）」</strong> 的黑色窗口会<strong>一直保持打开</strong>。<br><strong>停止服务</strong>：关闭那个「Tocify 服务窗口」即可。</blockquote>
+<p><img src="/screenshots/截图1.png" alt="首页"></p>
+<h2>三、第一次使用：配置 AI API</h2>
+<p>点击页面<strong>左上角的"API 设置"</strong>，展开配置面板：</p>
+<h3>1. 选择 LLM Provider（服务商）</h3>
+<ul>
+<li>下拉选择 <strong>"Custom / OpenAI Compatible"</strong>（自定义 OpenAI 兼容接口）</li>
+<li>支持：Gemini、Qwen、Doubao、Zhipu、自定义聚合平台（如 OpenCodeGo、Command Code 等）</li>
+</ul>
+<h3>2. 填写 Base URL</h3>
+<blockquote>⚠️ <strong>重要</strong>：Base URL 只需写到 <strong><code>/v1</code></strong> 即可，<strong>不要写 <code>/chat/completions</code></strong>，软件会自动补全后面的路径。</blockquote>
 <table>
 <tr><th>写什么</th><th>是否正确</th></tr>
 <tr><td><code>https://api.example.com/v1</code></td><td>✅ 正确</td></tr>
 <tr><td><code>https://api.example.com/v1/chat/completions</code></td><td>❌ 错误（多写路径易导致请求失败）</td></tr>
 </table>
-
-<h3>2. 智能添加书签</h3>
-<p>在右侧选中某一页后，点击对应级别的按钮，书签会根据其页码与级别，自动插入到正确的位置。</p>
+<h3>3. 填写 API Key</h3>
 <ul>
-<li>从 <strong>1级 / 2级 / 3级 / 4级</strong> 中选择书签的级别</li>
-<li>系统自动按"页码顺序 + 层级归属"确定插入点，无需手动拖拽</li>
-<li>例：一个 2 级书签在 52 页，系统会找到页码相近的 2 级同级书签，把它插到正确位置；若无同级参照，则归入页码最近且在它之前的上一级书签下</li>
-<li>支持为目录之前的前言、序言等页面添加书签（负数逻辑页码也可正常添加）</li>
+<li>在 <strong>Key</strong> 输入框中粘贴你的 API Key（只保存在本地浏览器，不会上传服务器）</li>
+<li>若使用聚合平台，Key 从平台获取</li>
 </ul>
-
-<h3>3. 修改页码时实时切换</h3>
-<p>编辑书签页码时，右侧（无论是预览模式还是编辑模式的页面网格）都会<strong>实时切换到对应页面</strong>，方便边改边核对，不需要手动翻页。</p>
-
-<h2>使用流程</h2>
-<h3>方式一：AI 自动生成目录（推荐）</h3>
-<ol>
-<li><strong>加载 PDF</strong>：点击「上传你的 PDF」，选择本地 PDF 文件（或直接拖拽到区域）。</li>
-<li><strong>选择目录页范围</strong>：在右侧页面网格中，拖动选择包含目录的页面（通常是前几页）。可添加多个范围。</li>
-<li><strong>生成目录</strong>：点击「从所选页面生成目录」按钮，AI 会识别目录图片并生成结构化书签。若数量较多，会自动分批识别并在进度条中显示进度。</li>
-<li><strong>校准页码偏移</strong>（如果 AI 识别页不准）：点击首页条目，按提示选择该章节实际对应的物理页码。</li>
-<li><strong>检查与微调</strong>：在左侧编辑器中核对每个书签的标题与页码，可拖动调整层级、点页码输入框用上下按钮微调（右侧会实时跳页）。</li>
-<li><strong>导出 PDF</strong>：点击「导出 PDF」生成带有可点击目录的新 PDF。</li>
-</ol>
-
-<h3>方式二：手动添加书签</h3>
-<ol>
-<li><strong>加载 PDF</strong> 后，在左侧编辑器底部点击「在下方插入」新增一条书签，输入标题与页码。</li>
-<li>也可先单击某条书签聚焦它，再点「在上方插入」，新书签会插入到该条目的上方。</li>
-<li><strong>智能添加书签</strong>：在右侧选中某一页（预览模式翻到该页，或编辑模式框选单独一页），点击对应的「1级 / 2级 / 3级 / 4级」按钮，系统会按页码与层级自动定位插入。</li>
-<li>重复直至完成所有条目，再点「导出 PDF」。</li>
-</ol>
-
-<h3>其他说明</h3>
+<h3>4. 填写自定义模型名（Custom Model）</h3>
 <ul>
-<li><strong>页码偏移</strong>：当 PDF 标注页码与实际页码不一致时，可在「目录设置」中调整「页码偏移量」，或在生成后通过首个目录项校准。</li>
-<li><strong>OCR 工具</strong>：对于无目录的纯扫描件，可访问 <code>/ocr</code> 页面生成可搜索的双层 PDF，配合 AI 识别文本目录。</li>
+<li>如 <code>gpt-4o</code>、<code>qwen-vl-plus</code> 等（取决于你的 Provider 支持的模型）</li>
 </ul>
-
+<h3>5. 保存</h3>
+<p>点击 <strong>"保存"</strong> 按钮。</p>
+<p><img src="/screenshots/截图2.png" alt="API设置"></p>
+<h2>四、上传 PDF</h2>
+<ol>
+<li>点击页面右侧 <strong>"上传你的 PDF"</strong> 区域。</li>
+<li>选择要添加目录的 PDF 文件；或直接<strong>拖拽 PDF 文件</strong>到该区域。</li>
+<li>等待加载完成（大文件可能需要几十秒）。</li>
+</ol>
+<p><img src="/screenshots/截图3.png" alt="上传PDF"></p>
+<h2>五、选择目录所在页面范围</h2>
+<ol>
+<li>在右侧 PDF 预览（默认网格视图）中，找到<strong>包含目录的页面</strong>（通常是前几页：序言、目录页等）。</li>
+<li><strong>按住鼠标左键拖动</strong>，框选目录所在的页面范围（如第 1-5 页）。</li>
+<li>如果目录分布在不连续的页面，可以点击 <strong>"Add another range"</strong> 添加多个范围（如第 1-2 页 + 第 5-6 页）。</li>
+</ol>
+<blockquote>提示：拖动框选后，左侧会显示"目录页面选择"的起止页码。</blockquote>
+<p><img src="/screenshots/截图4.png" alt="选择目录范围"></p>
+<h2>六、点击"生成目录"并等待</h2>
+<ol>
+<li>点击左侧蓝色按钮 <strong>"从所选页面生成目录"</strong>。</li>
+<li>等待 AI 识别（通常几秒到几分钟，取决于页数和目录长度）。若目录页数较多，会自动分批识别，进度条会显示进度。</li>
+<li>识别完成后，左侧编辑器会出现目录条目标题和页码。</li>
+</ol>
+<p><img src="/screenshots/截图5.png" alt="AI识别进度"></p>
+<h2>七、根据首个目录项校准页码偏移</h2>
+<blockquote>如果 AI 识别的目录页码与实际物理页有偏差（常见于书籍有封面、序言等前置内容导致），需要校准。</blockquote>
+<ol>
+<li>点击左侧目录列表中<strong>第一个目录项</strong>（它会触发右侧预览跳到对应页）。</li>
+<li>页面会弹出 <strong>"通过首个目录项校准页码偏移"</strong> 窗口。</li>
+<li>在右侧预览中核对，选择该目录项<strong>实际对应的物理页码</strong>。</li>
+<li>点击 <strong>"是的！就是这一页！"</strong>。</li>
+</ol>
+<blockquote>也可以手动在 <strong>"目录设置" → "页码偏移量"</strong> 中调整（物理页码 - 标注页码 = 偏移量）。</blockquote>
+<p><img src="/screenshots/截图6.png" alt="校准偏移"></p>
+<h2>八、检查生成的目录对齐状况</h2>
+<ol>
+<li>在左侧编辑器中检查每个目录条目的<strong>标题</strong>与<strong>页码</strong>是否准确。</li>
+<li>点击某个目录条目，右侧预览会<strong>跳到对应页</strong>，核对内容是否匹配。</li>
+<li>如果有错：
+<ul>
+<li>点击页码输入框的<strong>上下箭头</strong>微调页码（右侧实时跳页）</li>
+<li>点击标题输入框直接修改标题</li>
+<li>拖动条目左侧的<strong>拖拽手柄</strong>调整层级和顺序</li>
+</ul></li>
+</ol>
+<p><img src="/screenshots/截图7.png" alt="目录编辑器"></p>
+<h2>九、手动添加目录条目（可选）</h2>
+<p>如果 AI 识别遗漏了某部分，可以手动补：</p>
+<h3>1. 「在下方插入」/「在上方插入」</h3>
+<ul>
+<li>先<strong>单击某个已有目录条目</strong>（选中它，变蓝高亮）作为锚点。</li>
+<li>点击底部 <strong>"在下方插入"</strong> → 在该条目<strong>下方</strong>插入一条空条目（同层级）。</li>
+<li>点击 <strong>"在上方插入"</strong> → 在该条目<strong>上方</strong>插入一条空条目。</li>
+<li>然后输入标题和页码即可。</li>
+</ul>
+<h3>2. 「智能添加书签」（按级别自动定位）</h3>
+<ul>
+<li>在右侧<strong>预览模式</strong>翻到需要添加书签的页面（或编辑模式网格中<strong>框选单独一页</strong>）。</li>
+<li>点击底部"智能添加书签"旁的 <strong>1级 / 2级 / 3级 / 4级</strong> 按钮。</li>
+<li>系统会<strong>根据页码和级别自动把新书签插到正确位置</strong>（如第 52 页的 2 级书签会找到最近的同级书签自动归位，无需手动拖拽）。</li>
+</ul>
+<p><img src="/screenshots/截图8.png" alt="插入按钮"></p>
+<h2>十、导出最终 PDF</h2>
+<ol>
+<li>检查所有目录条目无误后，点击右侧 <strong>"导出 PDF"</strong> 按钮（绿色）。</li>
+<li>浏览器会下载<strong>带新目录的 PDF 文件</strong>（文件名通常与原文件名相同或加后缀）。</li>
+<li>用阅读器（如 Adobe Reader、掌阅、WPS）打开，点击目录书签即可跳转。</li>
+</ol>
+<p><img src="/screenshots/截图9.png" alt="导出PDF"></p>
+<h2>常见问题</h2>
+<h3>Q: 双击 <code>启动Tocify.bat</code> 提示找不到 Node.js？</h3>
+<p>到 https://nodejs.org 下载安装 LTS 版本，安装时勾选 "Add to PATH"，然后重新运行脚本。</p>
+<h3>Q: AI 识别出来只有一半目录？</h3>
+<p>说明目录太长被截断。本项目已优化分批识别（每 4 页一批），如果仍不完整，建议减少单次识别的页数范围，分多次识别后手动合并。</p>
+<h3>Q: 打开后 API 设置里显示已配置？</h3>
+<p>API 信息只保存在本地浏览器 localStorage，不是程序自带。如果已经配置过，打开会自动显示；发布给别人使用，他们本地是空的，需自行配置。</p>
+<h3>Q: 书签在手机阅读器（掌阅等）里错位一页？</h3>
+<p>不同阅读器对页码偏移的解析不同。建议导出后在目标阅读器中测试；必要时在"目录设置"中调整页码偏移量，或导出后不使用分段页码。</p>
 <h2>开源协议</h2>
-<p>本项目基于 <a href="https://github.com/anig1scur/tocify">anig1scur/tocify</a>（GPL-3.0）修改而来，并<strong>整体使用 <a href="./LICENSE">GPL-3.0</a></strong> 许可证发布。</p>
+<p>本项目基于 <a href="https://github.com/anig1scur/tocify">anig1scur/tocify</a>（GPL-3.0）修改而来，并<strong>整体使用 GPL-3.0</strong> 许可证发布。</p>
 <ul>
 <li>你可以自由使用、修改、再分发</li>
 <li>衍生作品必须继续以 GPL-3.0 开源</li>
 </ul>
-
-<hr>
-<p>原作者的赞赏方式（支付宝 / ko-fi）：<a href="https://ko-fi.com/aerisz">ko-fi</a></p>
 </body>
 </html>
