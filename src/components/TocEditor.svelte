@@ -879,7 +879,11 @@
    */
   const smartInsertBookmark = (targetLevel: number) => {
     const newPage = smartInsertLogicalPage;
-    if (!newPage) return;
+    // newPage 允许为 0 或负数：前言、序言等位于目录之前的页面，经过页码偏移量换算后
+    // 逻辑页码可能是 0 或负数，这是正常数据，应当允许为它们添加书签。
+    // 旧写法 `if (!newPage) return` 会把逻辑页码 0 误判为「未选中页面」而静默返回，
+    // 与上游 smartInsertLogicalPage 允许 0 的修复相矛盾，这里一并纠正。
+    if (newPage === null || newPage === undefined) return;
 
     saveHistory();
     const flatItems = flattenTocItems($tocItems);
@@ -894,11 +898,46 @@
     };
 
     const insertIndex = computeSmartInsertIndex(flatItems, targetLevel, newPage);
+
+    // ===== 自动接管「孤儿低级别书签」=====
+    // 典型场景：AI 自动识别目录时漏掉了某个高级别书签（例如「第一章」），
+    // 但它下属的低级别书签（「第一节」「第二节」…）被正常识别出来了。
+    // 由于缺失父级，这些孤儿书签会被解析到前面某个同级/更高级别书签之下，层级归属错误。
+    // 用户此时用「智能添加书签」补回这个高级别书签，本逻辑负责把孤儿书签重新归属到新书签下。
+    //
+    // 判定方式：从插入点左侧紧邻位置开始向左回溯，凡同时满足
+    //   ① 层级比新书签更深（level > targetLevel）
+    //   ② 页码不早于新书签（to >= newPage）
+    // 的条目都算「孤儿」，直到遇到第一个不满足条件的条目为止。
+    //
+    // 设计权衡（重要）：
+    // 1. 为什么要求「连续」而不是「散点收集」：扁平列表里后代紧跟在祖先之后，
+    //    若只摘走满足条件的后代、却把它的祖先留在原处，会造成层级断裂
+    //    （normalizeFlatLevels 会把断裂后的深层条目强制降级），因此这里只取连续后缀块。
+    // 2. 为什么要设「页码 >= newPage」下界：避免误吞前一个高级别书签自身管辖的、
+    //    页码更早的旧内容（例如「目录」下页码为 5 的「前言」）。
+    // 3. 向左回溯天然会被「前一个层级不深于新书签的条目」截断，不会越界到更前面
+    //    那个高级别书签的领地，所以无需再额外校验上界。
+    let orphanStartIndex = insertIndex;
+    for (let i = insertIndex - 1; i >= 0; i--) {
+      const candidate = flatItems[i];
+      if (candidate.level <= targetLevel) break;
+      if (candidate.to < newPage) break;
+      orphanStartIndex = i;
+    }
+
+    // 重组扁平列表，把孤儿块从新书签前面搬到新书签后面：
+    //   片段顺序 = [孤儿块之前的内容] + [新书签] + [孤儿块] + [原插入点之后的内容]
+    // 这样 buildTreeFromFlat 解析层级时，会把孤儿块挂到新书签之下。
+    // 注意：孤儿块原本位于 [orphanStartIndex, insertIndex)，新书签前移后，
+    // 它在最终扁平列表中的索引即为 orphanStartIndex。
     const newFlatItems = [
-      ...flatItems.slice(0, insertIndex),
+      ...flatItems.slice(0, orphanStartIndex),
       newItem,
+      ...flatItems.slice(orphanStartIndex, insertIndex),
       ...flatItems.slice(insertIndex),
     ];
+    const newItemIndex = orphanStartIndex;
 
     // 自动展开新条目的所有祖先节点，让新插入的子级书签立即可见。
     // 思路：在扁平列表里，新条目的祖先就是它前面那些"层级比它浅"的条目中，
@@ -907,7 +946,7 @@
     const forceOpenIds = new Set<string>();
     if (targetLevel > 1) {
       const ancestorStack: {level: number; id: string}[] = [];
-      for (let i = 0; i < insertIndex; i++) {
+      for (let i = 0; i < newItemIndex; i++) {
         const fi = newFlatItems[i];
         // 弹出栈顶所有层级不比当前浅的节点（它们不是 fi 的祖先）
         while (ancestorStack.length > 0 && ancestorStack[ancestorStack.length - 1].level >= fi.level) {
