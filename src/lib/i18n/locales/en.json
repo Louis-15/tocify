@@ -124,7 +124,9 @@
     "smart_add_tooltip": "Smart Add Bookmark\nPick a page on the right (navigate to it in preview, or drag-select a single page in the grid), then click the matching level button below. The bookmark is placed automatically based on its page and level.",
     "smart_add_level": "Lv.{level}",
     "smart_add_hint": "Will insert a level-{level} bookmark at page {page}; position is calculated automatically",
-    "smart_add_no_page": "Navigate to the target page in preview, or drag-select a single page in the grid first"
+    "smart_add_no_page": "Navigate to the target page in preview, or drag-select a single page in the grid first",
+    "page_decrease_hint": "Page -1 (move the bookmark up: smaller page number)",
+    "page_increase_hint": "Page +1 (move the bookmark down: larger page number)"
   },
   "btn": {
     "generate_toc_ai": "Generate ToC from Pages",

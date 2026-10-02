@@ -120,7 +120,9 @@
     "smart_add_tooltip": "智能添加书签\n在右侧选中某一页（预览模式翻到该页，或编辑模式在页面网格中框选单独一页）后，点击下方对应级别的按钮，系统会根据该页页码和书签级别，自动把书签插入到合适的位置。",
     "smart_add_level": "{level}级",
     "smart_add_hint": "将在第 {page} 页插入 {level} 级书签，位置自动计算",
-    "smart_add_no_page": "请先在右侧预览翻到目标页，或在编辑模式的页面网格中框选单独一页"
+    "smart_add_no_page": "请先在右侧预览翻到目标页，或在编辑模式的页面网格中框选单独一页",
+    "page_decrease_hint": "页码 -1（上调书签位置：页码变小）",
+    "page_increase_hint": "页码 +1（下调书签位置：页码变大）"
   },
   "btn": {
     "generate_toc_ai": "从所选页面生成目录",

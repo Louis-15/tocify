@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {ChevronRight, ChevronDown, Plus, Trash, GripVertical} from 'lucide-svelte';
+  import {ChevronRight, ChevronDown, ChevronUp, Plus, Trash, GripVertical} from 'lucide-svelte';
   import ShortUniqueId from 'short-unique-id';
   import Self from './TocItem.svelte';
   import {maxPage, tocConfig, dragDisabled} from '../stores';
@@ -102,6 +102,46 @@
     const val = parseInt(target.value, 10);
     if (!isNaN(val)) {
       dispatch('jumpToPage', {to: val});
+    }
+  }
+
+  /**
+   * 页码步进：delta 为 -1 表示减小页码，+1 表示增大页码。
+   *
+   * 为什么不用浏览器原生 number input 的上下微调箭头（stepper）：
+   * 目录列表按「页码小的在上、页码大的在下」排列，因此用户的直觉是
+   * 「点上面的箭头 = 页码变小」「点下面的箭头 = 页码变大」。
+   * 但原生 stepper 的方向被浏览器固定为「上 = 增、下 = 减」，与目录的视觉顺序正好相反，
+   * 而 HTML/CSS 没有任何属性可以反转它的方向。所以这里隐藏原生 spinner（见模板中的
+   * [appearance:textfield] 等类名），改用自绘的上下按钮，并反转步进方向。
+   *
+   * 步进后立即提交到 item 并让右侧预览跳页，不必等输入框失焦，
+   * 连续点击时能即时看到预览跟随；同时保持 editPage 与 item.to 同步，
+   * 避免外部同步逻辑（!isPageFocused 时用 item.to 覆盖 editPage）把刚改的值冲掉。
+   */
+  function handlePageStep(delta: number) {
+    const base = Number(editPage);
+    if (!Number.isFinite(base)) return;
+
+    const next = Math.floor(base) + delta;
+    editPage = next;
+    // 先同步 editPage 再提交：handleUpdatePage 内部读取的就是刚写入的 next 值。
+    handleUpdatePage();
+    dispatch('jumpToPage', {to: next});
+  }
+
+  /**
+   * 页码输入框键盘处理：反转原生 ArrowUp/ArrowDown 的步进方向。
+   * number input 原生响应上下方向键（上=增、下=减），与目录的视觉顺序相反，
+   * 这里 preventDefault 掉原生行为并改走 handlePageStep，保证键盘与按钮行为一致。
+   */
+  function handlePageKeydown(e: KeyboardEvent) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      handlePageStep(-1);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      handlePageStep(1);
     }
   }
 
@@ -427,20 +467,44 @@
         </div>
       </div>
 
-      <input
-        type="number"
-        bind:value={editPage}
-        on:mousedown={handleShiftSelectFromInput}
-        on:click={handleInputClick}
-        on:input={handlePageInput}
-        on:focus={() => (isPageFocused = true)}
-        on:blur={() => {
-          isPageFocused = false;
-          handleUpdatePage();
-        }}
-        on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
-        class="w-14 border-2 border-black rounded ml-1 pl-1.5 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <!-- 页码输入框 + 反转方向的步进按钮 -->
+      <!-- 目录按「页码小在上、大在下」排列，故上箭头应减小页码、下箭头应增大页码； -->
+      <!-- 原生 number stepper 方向固定为「上=增/下=减」且无法用属性反转，因此隐藏原生 spinner，用自绘按钮替代。 -->
+      <div class="relative ml-1 shrink-0">
+        <input
+          type="number"
+          bind:value={editPage}
+          on:mousedown={handleShiftSelectFromInput}
+          on:click={handleInputClick}
+          on:input={handlePageInput}
+          on:focus={() => (isPageFocused = true)}
+          on:blur={() => {
+            isPageFocused = false;
+            handleUpdatePage();
+          }}
+          on:keydown={handlePageKeydown}
+          on:keypress={(e) => e.key === 'Enter' && (e.target as HTMLElement).blur()}
+          class="w-14 border-2 border-black rounded pl-1.5 pr-5 py-1 text-sm myfocus focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+        <div class="absolute right-0.5 top-1/2 -translate-y-1/2 flex flex-col">
+          <button
+            type="button"
+            on:click={() => handlePageStep(-1)}
+            class="flex h-3.5 w-3.5 items-center justify-center rounded-sm text-gray-500 hover:bg-gray-200 hover:text-black transition-colors"
+            title={$t('toc.page_decrease_hint')}
+          >
+            <ChevronUp size={11} />
+          </button>
+          <button
+            type="button"
+            on:click={() => handlePageStep(1)}
+            class="flex h-3.5 w-3.5 items-center justify-center rounded-sm text-gray-500 hover:bg-gray-200 hover:text-black transition-colors"
+            title={$t('toc.page_increase_hint')}
+          >
+            <ChevronDown size={11} />
+          </button>
+        </div>
+      </div>
 
       <div class="flex">
         <button
