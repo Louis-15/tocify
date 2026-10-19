@@ -110,6 +110,13 @@ const MAX_CUSTOM_BASE_URL_LENGTH = 512;
 const MAX_CUSTOM_MODEL_LENGTH = 200;
 const MAX_API_KEY_LENGTH = 4096;
 
+// OpenCode Go（https://opencode.ai/zen/go/v1）的接口强制要求 x-opencode-session 请求头，
+// 缺失时会直接返回 400 MissingSessionID。该头只要求“稳定”，不需要真实会话 ID，
+// 因此这里使用固定的本地标识常量，避免每次请求随机生成导致上游无法关联请求。
+const OPENCODE_SESSION_ID = 'tocify-local';
+// 仅对 OpenCode 官方主机追加该请求头，其余 OpenAI 兼容提供商（qwen/zhipu/doubao 等）保持原有行为。
+const OPENCODE_HOSTNAME = 'opencode.ai';
+
 export const DEFAULT_CUSTOM_BASE_URL = 'https://api.openai.com/v1';
 export const DEFAULT_CUSTOM_MODEL = 'gpt-5.4-mini';
 
@@ -526,12 +533,22 @@ async function fetchOpenAiCompatJson(
   fallbackMessage: string,
 ): Promise<string> {
   const requestApiKey = normalizeApiKeyForRequest(apiKey);
+
+  // 先按通用 OpenAI 兼容格式构造请求头，再按 hostname 决定是否追加 OpenCode 专属头。
+  // baseUrl 在进入此函数前已由 normalizeCustomBaseUrl 校验过（https、无凭据、非内网），
+  // 因此这里 new URL 不会抛异常；hostname 由 URL 解析器统一小写化。
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${ requestApiKey }`,
+  };
+
+  if (new URL(baseUrl).hostname === OPENCODE_HOSTNAME) {
+    headers['x-opencode-session'] = OPENCODE_SESSION_ID;
+  }
+
   const response = await fetch(`${ baseUrl }/chat/completions`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${ requestApiKey }`,
-    },
+    headers,
     body: JSON.stringify(body),
   });
 

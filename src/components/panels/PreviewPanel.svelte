@@ -33,6 +33,8 @@
   const dispatch = createEventDispatcher();
   let fileInputRef: HTMLInputElement;
 
+  // 拖拽深度计数器（用途与原因详见下方"拖拽替换 PDF"注释）
+  let dragDepth = 0;
 
   function handleFileInputChange(e: Event) {
     const target = e.target as HTMLInputElement;
@@ -43,20 +45,21 @@
   }
 
   /**
-   * Dropzone 覆盖层自己的 drop 处理。
+   * Dropzone 的 "drop" 事件处理。
    *
-   * 为什么外层已经处理了 drop，这里还要保留？
-   * svelte-file-dropzone 内部对 dragenter/dragover/dragleave/drop 都调用了
-   * stopPropagation + stopImmediatePropagation（见其 onDropCb 等实现），
-   * 事件不会继续冒泡到外层容器。因此：
-   *   - 未加载 PDF 时，拖拽落点在 Dropzone 覆盖层内 → 只有这里能收到，必须由它接管；
-   *   - 已加载 PDF 时，拖拽落点在 z-10 的 PDFViewer 上（不经过 Dropzone）→ 由外层容器接管。
-   * 两者天然互斥，不会重复派发 fileselect。
+   * 重要：这个事件**不只**在拖拽文件时触发。svelte-file-dropzone 内部把 input[type=file] 的
+   * change 事件也接到了同一个 onDropCb 上（见其模板 `on:change={onDropCb}`），
+   * 因此"点击覆盖层 → 弹出文件对话框 → 选中文件"这条路径最终也是通过 dispatch("drop") 出来的。
+   * 所以这个监听必须保留，否则点击选择文件会完全失效。
+   *
+   * 它不会被拖拽重复触发：配合模板里的 noDrag={true}，
+   * Dropzone 的内部实现 `composeDragHandler = fn => (noDrag ? null : fn)` 会把
+   * root 元素上的 dragenter/dragover/dragleave/drop 全部置空，
+   * 拖拽事件因此完全冒泡到外层卡片容器，由 handleNativeDrop 统一处理。
    */
   function handleDrop(e: CustomEvent) {
     isDragging = false;
-    // 归零外层拖拽深度，避免"从外层进入、却在覆盖层内落下"时计数残留，
-    // 导致下次拖拽的 dragleave 无法归零、遮罩卡住不消失
+    // 归零外层拖拽深度，避免计数残留导致遮罩卡住不消失
     dragDepth = 0;
     const {acceptedFiles} = e.detail;
     if (acceptedFiles.length) {
@@ -65,17 +68,19 @@
   }
 
   // ---- 拖拽替换 PDF（修复：已有书籍时拖拽无法替换）----
-  // 背景 bug：svelte-file-dropzone 的覆盖层与 PDFViewer 是兄弟节点，
-  // 而已加载 PDF 时 PDFViewer 所在容器带 z-10，层级高于覆盖层。
-  // 拖拽落点实际落在 PDFViewer 上，事件冒泡路径不经过 Dropzone 容器，
-  // 于是 Dropzone 的 dragenter / drop 都收不到 → isDragging 永远为 false →
-  // 只能靠"上传新文件"按钮换书。这里改为在整个预览卡片外层容器上挂原生拖拽事件，
-  // 捕获范围包含 PDFViewer，任何位置拖入都能触发替换。
+  // 背景 bug：原实现只把拖拽监听挂在 svelte-file-dropzone 上，
+  // 而 Dropzone 的覆盖层与 PDFViewer 是兄弟节点，已加载 PDF 时 PDFViewer 所在容器带 z-10，
+  // 层级高于覆盖层。拖拽落点落在 PDFViewer 上，事件路径不经过 Dropzone，
+  // 于是 Dropzone 的 dragenter / drop 都收不到 → isDragging 恒为 false →
+  // 只能靠"上传新文件"按钮换书。
+  //
+  // 修复方式：把拖拽监听提升到整张预览卡片（外层容器），捕获范围天然包含 PDFViewer；
+  // 同时给 Dropzone 加 noDrag={true}，让它退出拖拽处理（否则同一个 drop 会被派发两次 fileselect），
+  // 仅保留其"点击选择文件"能力（走上面的 handleDrop）。
   //
   // 用 dragDepth 计数器而不是布尔量：dragenter / dragleave 会在子元素之间穿梭时
   // 成对触发，若直接赋 true/false，指针移到子元素上就会瞬间变 false，遮罩会闪烁。
   // 计数器保证只有真正离开整个面板（深度归零）才关闭遮罩。
-  let dragDepth = 0;
 
   /** 判断拖入的是否为 PDF：优先看 MIME，兼容部分系统 MIME 为空的情况，再回退到扩展名 */
   function isPdfFile(file: File | undefined | null): boolean {
@@ -90,16 +95,20 @@
   }
 
   function handleNativeDragEnter(e: DragEvent) {
-    // 加载中忽略拖拽：此时正在销毁旧实例/解析新文件，再拖入会造成状态竞争
-    if (isFileLoading || !isFileDrag(e)) return;
+    if (!isFileDrag(e)) return;
+    // 无论是否加载中都先阻止默认行为：否则浏览器会把拖入的文件当成导航目标
     e.preventDefault();
+    // 加载中不做视觉反馈也不递增计数：此时正在销毁旧实例/解析新文件，再拖入会造成状态竞争
+    if (isFileLoading) return;
     dragDepth += 1;
     isDragging = true;
   }
 
   function handleNativeDragOver(e: DragEvent) {
-    if (isFileLoading || !isFileDrag(e)) return;
+    if (!isFileDrag(e)) return;
+    // 必须在这里 preventDefault，否则 drop 事件根本不会触发，且浏览器会直接打开该文件
     e.preventDefault();
+    if (isFileLoading) return;
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'copy';
     }
@@ -163,17 +172,14 @@
         </div>
       </div>
     {:else}
-      <!-- 无 PDF 时：拖拽落点在这个覆盖层内，Dropzone 内部 stopPropagation 会阻断冒泡，
-           外层收不到事件，所以这里必须保留它自己的拖拽监听；
-           有 PDF 时：PDFViewer 以 z-10 压在覆盖层之上，落点不经过 Dropzone，
-           由外层容器接管。两条路径互补，不会重复触发。 -->
+      <!-- 注意：这里只保留 Dropzone 的"点击选择文件"能力（点击覆盖层弹出文件选择框）。
+           拖拽相关的 on:drop / on:dragenter / on:dragleave 一律不挂：
+           拖拽由外层卡片容器统一处理（事件正常冒泡，见上方说明），
+           若这里再挂一份，同一次 drop 会被派发两次 fileselect。 -->
       <Dropzone
         containerClasses="absolute inset-0 w-full h-full"
         accept=".pdf"
         disableDefaultStyles
-        on:drop={handleDrop}
-        on:dragenter={() => !isFileLoading && (isDragging = true)}
-        on:dragleave={() => (isDragging = false)}
       >
         <DropzoneView
           {isDragging}
