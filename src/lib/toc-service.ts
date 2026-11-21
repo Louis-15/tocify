@@ -59,7 +59,13 @@ async function fetchChunk(
   visionPrompt: string | undefined,
 ): Promise<any[]> {
   if (requiresUserApiKeyForModel(provider, apiKey, modelOverrides)) {
-    throw new Error(t('error.custom_model_needs_api_key'));
+    // OpenCode Go / Command Code 是内置预设供应商，但同样需要用户自备 key，提示语与自定义模型区分开。
+    const messageKey = provider === 'opencode'
+      ? 'error.opencode_api_key_required'
+      : provider === 'commandcode'
+        ? 'error.commandcode_api_key_required'
+        : 'error.custom_model_needs_api_key';
+    throw new Error(t(messageKey));
   }
 
   const response = await fetch('/api/process-toc', {

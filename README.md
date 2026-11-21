@@ -55,11 +55,15 @@ Tocify/
 
 ### 1. 选择 LLM Provider（服务商）
 - 下拉选择 **"API 提供商"**
-- 支持：Gemini、Qwen、Doubao、Zhipu、自定义聚合中转平台（OpenAI 兼容接口，如 OpenCodeGo、Command Code 等）
+- 支持：Gemini、Qwen、Doubao、Zhipu、OpenCode Go（内置预设供应商）、Command Code（内置预设供应商）、自定义聚合中转平台（OpenAI 兼容接口）
 - 注意：需要选择能识图的模型
 
-### 2. 填写 Base URL
-> ⚠️ **重要**：Base URL 只需写到 **`/v1`** 即可，**不要写 `/chat/completions`**，软件会自动补全后面的路径。
+### 2. 填写 Base URL（仅自定义供应商需要）
+> 选择内置供应商（Gemini / Qwen / Doubao / Zhipu / OpenCode Go / Command Code）时，Base URL 由程序预设，无需填写也无法修改。
+> 其中 **OpenCode Go** 固定使用 `https://opencode.ai/inference/go/openai/v1`，Key 需在你自己的 OpenCode Console 中创建。
+> **Command Code** 固定使用 `https://api.commandcode.ai/provider/v1`，Key 需在你自己的 Command Code Studio 中创建；其 Claude 模型只支持 `/messages`，本应用使用 `/chat/completions`，请选择 OpenAI 兼容模型（如 `deepseek/deepseek-v4-flash`）。
+
+> ⚠️ **重要**：自定义供应商的 Base URL 只需写到 **`/v1`** 即可，**不要写 `/chat/completions`**，软件会自动补全后面的路径。
 
 | 写什么 | 是否正确 |
 |--------|----------|
@@ -68,6 +72,8 @@ Tocify/
 
 ### 3. 填写 API Key
 - 在 **Key** 输入框中粘贴你的 API Key（只保存在本地浏览器，不会上传服务器）
+- Key 会**按供应商分别保存**：切换 LLM Provider 时会自动带出该供应商上次填写的 Key，无需重复输入
+- 填好后可点击 **"测试连通性"** 按钮验证：会发送一次极小的真实请求，用于确认网络、Key、模型名 / Endpoint ID 是否正确
 
 ### 4. 填写自定义模型名（Custom Model）
 - 如 `gpt-4o`、`qwen3.7-plus` 等（取决于你的 API 提供商支持的模型）
